@@ -1,0 +1,44 @@
+{
+  "name": "tolgaperde-desktop",
+  "version": "0.1.0",
+  "description": "Tolga Perde - Windows masaüstü uygulaması",
+  "main": "main.js",
+  "author": "Tolga Perde",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.tolgaperde.desktop",
+    "productName": "TolgaPerde",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "../assets/logo.png"
+    },
+    "files": [
+      "main.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "dist"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "TolgaPerde_Setup.${ext}"
+    }
+  }
+}

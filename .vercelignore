@@ -1,0 +1,8 @@
+desktop/
+node_modules/
+dist/
+.expo/
+*.log
+.git/
+.vscode/
+.DS_Store

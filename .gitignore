@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+desktop/node_modules/
+
+# Build outputs
+dist/
+web-build/
+desktop/release/
+desktop/dist/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Vercel
+.vercel/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# Certificates / keys (NEVER commit)
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local
+src/config/firebaseConfig.local.js
+
+# OS
+*~
+*.swp

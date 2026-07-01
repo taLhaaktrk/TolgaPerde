@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "TolgaPerde",
+    "slug": "tolgaperde-project",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/logo.png",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "bundleIdentifier": "com.tolgaperde.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Eski borç defterlerini fotoğraflamak ve müşteri sayfası oluşturmak için kamera kullanılır."
+      }
+    },
+    "android": {
+      "package": "com.tolgaperde.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Eski borç defterlerini fotoğraflamak için kamera izni gerekiyor."
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}
