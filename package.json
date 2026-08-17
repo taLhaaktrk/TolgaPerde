@@ -7,7 +7,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "npx expo export --platform web && node scripts/inject-pwa.js"
+    "build:web": "npx expo export --platform web && node scripts/inject-pwa.js",
+    "desktop:build": "npm run build:web && cd desktop && npm run dist",
+    "desktop:publish": "npm run build:web && cd desktop && npm run publish"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

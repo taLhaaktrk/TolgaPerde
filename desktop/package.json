@@ -6,9 +6,11 @@
   "author": "Tolga Perde",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "publish": "electron-builder --publish always"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "express": "^4.19.2"
   },
   "devDependencies": {
@@ -39,6 +41,9 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "TolgaPerde_Setup.${ext}"
+    },
+    "publish": {
+      "provider": "github"
     }
   }
 }

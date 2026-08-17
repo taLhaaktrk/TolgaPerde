@@ -101,6 +101,74 @@ export function buildReminderMessage({
   return `${opening}${kalanSatiri}${ibanBlogu}${closing}`;
 }
 
+// "Uzun süre iletişime geçilmemiş / son ödemeden çok geçmiş" müşteri mesajı.
+// Taksit bazlı DEĞİL — genel bakiye + geçen süre üzerine kurulur.
+// hasPayment=true  → "Son ödemenizin üzerinden X gün geçmiştir..."
+// hasPayment=false → "Siparişinizin üzerinden X gün geçti, henüz ödeme alınamadı..."
+export function buildStaleReminderMessage({
+  customerName,
+  daysSince,
+  hasPayment,
+  remainingDebt,
+}) {
+  const ad = customerName || '';
+  const gun = typeof daysSince === 'number' && daysSince > 0 ? daysSince : 0;
+
+  let opening;
+  if (hasPayment) {
+    opening = `Sayın ${ad}, Tolga Perde olarak ödeme planınız hakkında bilgi vermek istedik. Son ödemenizin üzerinden ${gun} gün geçmiş olup ödeme planınıza gecikme olmuştur.`;
+  } else {
+    opening = `Sayın ${ad}, Tolga Perde olarak siparişiniz hakkında bilgi vermek istedik. Siparişinizin üzerinden ${gun} gün geçmiş olup henüz tarafımıza bir ödeme ulaşmamıştır.`;
+  }
+
+  const kalanSatiri =
+    typeof remainingDebt === 'number' && remainingDebt > 0
+      ? ` Kalan toplam bakiyeniz: ${formatAmount(remainingDebt)} TL'dir.`
+      : '';
+
+  const ibanBlogu = BUSINESS_IBAN ? `\n\nİşletme IBAN: ${BUSINESS_IBAN}` : '';
+  const closing = `\n\nAnlayışınız için teşekkür eder, iyi günler dileriz.`;
+
+  return `${opening}${kalanSatiri}${ibanBlogu}${closing}`;
+}
+
+/**
+ * Stale reminder — müşteri kartı & Hatırlatma bölümündeki buton için.
+ * @returns {Promise<{ok: boolean, reason?: string}>}
+ */
+export async function sendStaleReminder({
+  customerName,
+  phone,
+  daysSince,
+  hasPayment,
+  remainingDebt,
+}) {
+  const normalized = normalizePhoneTR(phone);
+  if (!normalized) {
+    return { ok: false, reason: 'Geçersiz telefon — uluslararası formata çevrilemedi.' };
+  }
+  const message = buildStaleReminderMessage({
+    customerName,
+    daysSince,
+    hasPayment,
+    remainingDebt,
+  });
+  const url = `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') window.open(url, '_blank');
+    } else {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) return { ok: false, reason: 'WhatsApp bu cihazda açılamıyor.' };
+      await Linking.openURL(url);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e?.message || 'Bilinmeyen hata' };
+  }
+}
+
 /**
  * WhatsApp Click-to-Chat linkini aç.
  * Mobilde WhatsApp uygulamasını, masaüstünde wa.me sayfasını (oradan WhatsApp Desktop/Web'e geçer).

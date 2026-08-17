@@ -12,7 +12,7 @@ import {
   MODULE_CUSTOMERS,
 } from '../context/AppShellContext';
 import { getInstallmentStatus } from '../utils/installments';
-import { sendWhatsAppReminder } from '../utils/whatsapp';
+import { sendWhatsAppReminder, sendStaleReminder } from '../utils/whatsapp';
 import {
   dismissInstallmentReminder,
   dismissAttentionReminder,
@@ -456,14 +456,41 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
 }
 
 function AttentionRow({ customer, onPress }) {
+  const handleWhatsApp = async () => {
+    if (!customer.phone) {
+      Alert.alert(
+        'Telefon Yok',
+        `${customer.fullName} için kayıtlı telefon numarası bulunmuyor. Önce müşteri kartını düzenleyip telefonu ekle.`,
+        [{ text: 'Tamam' }],
+        { tone: 'warning' }
+      );
+      return;
+    }
+    const result = await sendStaleReminder({
+      customerName: customer.fullName,
+      phone: customer.phone,
+      daysSince: customer._daysSince,
+      hasPayment: customer._hasPayment,
+      remainingDebt: customer.remainingAmount,
+    });
+    if (!result.ok) {
+      Alert.alert(
+        'WhatsApp Açılamadı',
+        result.reason || 'Bilinmeyen hata',
+        [{ text: 'Tamam' }],
+        { tone: 'danger' }
+      );
+    }
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={onPress}
-      style={[styles.attentionRow, shadows.sm]}
-    >
+    <View style={[styles.attentionRow, shadows.sm]}>
       <View style={styles.attentionDot} />
-      <View style={{ flex: 1 }}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={onPress}
+        style={styles.attentionMain}
+      >
         <Text style={styles.attentionName}>{customer.fullName || '—'}</Text>
         <Text style={styles.attentionMeta}>
           {customer._hasPayment
@@ -471,13 +498,25 @@ function AttentionRow({ customer, onPress }) {
             : `Sipariş üzerinden ${customer._daysSince} gün geçti, ödeme yok`}
           {customer.phone ? ` · ${customer.phone}` : ''}
         </Text>
-      </View>
+      </TouchableOpacity>
       <View style={styles.attentionAmount}>
         <Text style={styles.attentionAmountLabel}>Kalan</Text>
         <Text style={styles.attentionAmountVal}>{formatTL(customer.remainingAmount)}</Text>
       </View>
-      <Text style={styles.attentionChev}>›</Text>
-    </TouchableOpacity>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={handleWhatsApp}
+        style={styles.attentionWaBtn}
+      >
+        <LinearGradient
+          colors={['#25D366', '#1EB055']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <Text style={styles.attentionWaBtnTxt}>WP</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -705,7 +744,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: colors.warning,
     borderRadius: radii.md,
-    padding: spacing.md,
+    // paddingTop artırıldı → × butonu (top:6, height:22 → y=6→28) içerikle çakışmasın
+    paddingHorizontal: spacing.md,
+    paddingTop: 30,
+    paddingBottom: spacing.md,
+    // sağda × butonuna nefes → WP butonu iç içe girmesin
+    paddingRight: 34,
     gap: 12,
   },
   attentionDot: {
@@ -714,12 +758,34 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: colors.warning,
   },
+  attentionMain: { flex: 1 },
   attentionName: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
   attentionMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
   attentionAmount: { alignItems: 'flex-end' },
   attentionAmountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 },
   attentionAmountVal: { fontSize: 14, fontWeight: '800', color: colors.danger, marginTop: 2 },
-  attentionChev: { fontSize: 22, color: colors.textMuted },
+
+  // Sağdaki kompakt WhatsApp butonu — chevron'un yerini aldı
+  attentionWaBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginLeft: 6,
+    shadowColor: '#25D366',
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  attentionWaBtnTxt: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
 
   actionsGrid: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' },
   actionCard: {

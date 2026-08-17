@@ -11,6 +11,7 @@ import MainShell from './src/screens/MainShell';
 import LoginScreen from './src/screens/LoginScreen';
 import AdminDashboard from './src/screens/AdminDashboard';
 import AlertHost from './src/components/ui/AlertHost';
+import UpdateBanner from './src/components/ui/UpdateBanner';
 import './src/theme/webStyles'; // web/Electron: global CSS (scrollbar, focus, selection)
 import { colors } from './src/theme/colors';
 
@@ -46,6 +47,7 @@ export default function App() {
             <AppShellProvider>
               <RootRouter />
               <AlertHost />
+              <UpdateBanner />
             </AppShellProvider>
           </CustomerProvider>
         </AuthProvider>

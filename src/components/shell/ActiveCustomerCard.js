@@ -6,6 +6,8 @@ import useCustomers from '../../hooks/useCustomers';
 import { paymentMethodLabel } from '../../services/customerService';
 import CanvasViewerModal from './CanvasViewerModal';
 import { formatPhoneTR } from '../../utils/format';
+import { sendStaleReminder } from '../../utils/whatsapp';
+import Alert from '../../utils/alert';
 import { colors, gradients, radii, spacing, shadows } from '../../theme/colors';
 
 // Eşik: bu kadar gün ödeme yoksa uyarı rozeti çık.
@@ -97,6 +99,35 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
   const isActive = daysFromOrder !== null && daysFromOrder >= 0 && daysFromOrder <= ACTIVE_CUSTOMER_DAYS;
 
   const canPay = (customer.remainingAmount || 0) > 0;
+
+  const handleWhatsApp = async () => {
+    if (!customer.phone) {
+      Alert.alert(
+        'Telefon Yok',
+        `${customer.fullName} için kayıtlı telefon numarası bulunmuyor. Önce müşteri kartını düzenleyip telefonu ekle.`,
+        [{ text: 'Tamam' }],
+        { tone: 'warning' }
+      );
+      return;
+    }
+    // Referans gün: son ödeme varsa ondan, yoksa sipariş tarihinden
+    const daysSince = lastPay ? daysSincePay : daysSinceOrder;
+    const result = await sendStaleReminder({
+      customerName: customer.fullName,
+      phone: customer.phone,
+      daysSince: daysSince || 0,
+      hasPayment: !!lastPay,
+      remainingDebt: customer.remainingAmount,
+    });
+    if (!result.ok) {
+      Alert.alert(
+        'WhatsApp Açılamadı',
+        result.reason || 'Bilinmeyen hata',
+        [{ text: 'Tamam' }],
+        { tone: 'danger' }
+      );
+    }
+  };
 
   const orderDate = toDate(customer.orderDate) || toDate(customer.createdAt);
   // lastPaymentAt boşsa paymentHistory'den en güncel ödemeyi bul (arşiv kayıtlarda
@@ -352,25 +383,43 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
         </View>
       )}
 
-      <TouchableOpacity
-        activeOpacity={canPay ? 0.85 : 1}
-        onPress={canPay ? onPayment : null}
-        disabled={!canPay}
-      >
-        <LinearGradient
-          colors={canPay ? gradients.goldButton : ['#3A3F50', '#2A2F3C']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.payBtn}
+      <View style={styles.actionsRow}>
+        {canPay && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleWhatsApp}
+            style={styles.waActionBtn}
+          >
+            <LinearGradient
+              colors={['#25D366', '#1EB055']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={styles.waActionTxt}>WhatsApp Hatırlat</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          activeOpacity={canPay ? 0.85 : 1}
+          onPress={canPay ? onPayment : null}
+          disabled={!canPay}
+          style={styles.payActionBtn}
         >
-          <Text style={[
-            styles.payBtnTxt,
-            !canPay && { color: colors.textMuted },
-          ]}>
-            {canPay ? 'Ödeme Al' : 'Tamamı Ödendi'}
-          </Text>
-        </LinearGradient>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={canPay ? gradients.goldButton : ['#3A3F50', '#2A2F3C']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.payBtn}
+          >
+            <Text style={[
+              styles.payBtnTxt,
+              !canPay && { color: colors.textMuted },
+            ]}>
+              {canPay ? 'Ödeme Al' : 'Tamamı Ödendi'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -547,13 +596,39 @@ const styles = StyleSheet.create({
   remainingHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   remainingValue: { fontSize: 22, color: colors.danger, fontWeight: '900' },
 
-  payBtn: {
+  actionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
     marginTop: spacing.lg,
+  },
+  payActionBtn: { flex: 1 },
+  payBtn: {
     paddingVertical: 14,
     borderRadius: radii.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   payBtnTxt: { color: colors.primaryDeep, fontWeight: '900', fontSize: 14, letterSpacing: 0.5 },
+
+  waActionBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#25D366',
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  waActionTxt: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
 
   photosSection: { marginTop: spacing.lg },
   photosRow: { gap: spacing.sm, paddingRight: 4 },

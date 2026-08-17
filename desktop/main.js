@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Menu, shell, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, session, dialog } = require('electron');
 const path = require('path');
 const express = require('express');
+const { autoUpdater } = require('electron-updater');
 
 // Üstteki File / Edit / View / Window / Help menü çubuğunu tamamen kaldır.
 // Production app için profesyonel görünüm.
@@ -76,7 +77,72 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+// ────────────────────────────────────────────────────────────
+// Otomatik güncelleme (electron-updater + GitHub Releases)
+// Yayın akışı:
+//   1) Kod push edilir, PWA build alınır (dist/ oluşur)
+//   2) Ana dizinde: cd desktop && npm run publish  (GH_TOKEN env gerekli)
+//   3) Yeni .exe + latest.yml GitHub Releases'e yüklenir
+//   4) Abinin PC'sindeki kurulu uygulama açılışta latest.yml'yi kontrol eder,
+//      yeni sürüm varsa arka planda indirir, kullanıcıya "yeniden başlat" der.
+// ────────────────────────────────────────────────────────────
+function setupAutoUpdater() {
+  if (!app.isPackaged) return; // dev'de skip (paketlenmemiş app güncellenemez)
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('error', (err) => {
+    // Sessiz — internet yoksa vs. kullanıcıyı rahatsız etme
+    console.log('[auto-updater] error:', err?.message || err);
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[auto-updater] yeni sürüm bulundu:', info?.version);
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[auto-updater] güncel sürüm kullanılıyor');
+  });
+
+  autoUpdater.on('download-progress', (p) => {
+    if (win) win.setProgressBar((p.percent || 0) / 100);
+  });
+
+  autoUpdater.on('update-downloaded', async (info) => {
+    if (win) win.setProgressBar(-1);
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      buttons: ['Şimdi Yeniden Başlat', 'Daha Sonra'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Yeni Sürüm Hazır',
+      message: `TolgaPerde ${info?.version || ''} sürümü indirildi.`,
+      detail: 'Yeni sürümü yüklemek için uygulama yeniden başlatılacak.',
+    });
+    if (response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+    // Daha Sonra denirse quit'te otomatik yüklenir (autoInstallOnAppQuit=true)
+  });
+
+  // Açılıştan ~5 sn sonra kontrol et (renderer yüklensin diye biraz bekle)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((e) =>
+      console.log('[auto-updater] check hata:', e?.message || e)
+    );
+  }, 5000);
+
+  // Uygulama açıkken periyodik kontrol (2 saatte bir)
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 2 * 60 * 60 * 1000);
+}
+
+app.whenReady().then(() => {
+  createWindow();
+  setupAutoUpdater();
+});
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
