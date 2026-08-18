@@ -315,17 +315,12 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      {/* Backdrop'a tıklama → kapan. Kart üzerine tıklama → propagate etme (kapatmasın). */}
       <TouchableWithoutFeedback onPress={handleClose}>
         <View style={styles.backdrop}>
           <TouchableWithoutFeedback onPress={() => {}}>
-            <View style={[styles.card, shadows.lg]}>
-          <LinearGradient
-            colors={gradients.moduleHeader}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.header}
-          >
+            <View style={styles.card}>
+          {/* Header — sade koyu, sadece başlık + kapat butonu */}
+          <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={styles.headerEyebrow}>
                 {isEditing ? 'DÜZENLE' : 'YENİ KAYIT'}
@@ -337,10 +332,11 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
             <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
               <Text style={styles.closeTxt}>✕</Text>
             </TouchableOpacity>
-            <View style={styles.headerGoldLine} />
-          </LinearGradient>
+          </View>
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            {/* ── KİMLİK BİLGİLERİ ── */}
+            <Text style={styles.sectionHeader}>KİMLİK BİLGİLERİ</Text>
             <View style={styles.row2}>
               <Field
                 label="Ad Soyad"
@@ -363,6 +359,24 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
               )}
             </View>
 
+            {/* iOS tarzı switch — Kız/Erkek split */}
+            <TouchableOpacity
+              onPress={() => setIsSplit((v) => !v)}
+              activeOpacity={0.7}
+              style={styles.switchRow}
+              disabled={busy}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchLabel}>Kız / Erkek tarafı ayrı hesap</Text>
+                <Text style={styles.switchHint}>Düğün müşterilerinde iki tarafa bölünen ödemeler için</Text>
+              </View>
+              <View style={[styles.switchTrack, isSplit && styles.switchTrackOn]}>
+                <View style={[styles.switchThumb, isSplit && styles.switchThumbOn]} />
+              </View>
+            </TouchableOpacity>
+
+            {/* ── ÖDEME PLANI ── */}
+            <Text style={styles.sectionHeader}>ÖDEME PLANI</Text>
             <View style={styles.row2}>
               <Field
                 label="Toplam Tutar (₺)"
@@ -383,21 +397,6 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                 />
               )}
             </View>
-
-            {/* Split toggle — kompakt satır (nadir kullanılan opsiyon) */}
-            <TouchableOpacity
-              onPress={() => setIsSplit((v) => !v)}
-              activeOpacity={0.6}
-              style={styles.splitToggle}
-              disabled={busy}
-            >
-              <View style={[styles.splitCheckbox, isSplit && styles.splitCheckboxActive]}>
-                {isSplit && <Text style={styles.splitCheckmark}>✓</Text>}
-              </View>
-              <Text style={[styles.splitToggleTxt, isSplit && { color: colors.gold }]}>
-                Kız / Erkek tarafı ayrı hesap
-              </Text>
-            </TouchableOpacity>
 
             {/* Split alanları — iki taraf */}
             {isSplit && (
@@ -545,6 +544,8 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
               </View>
             )}
 
+            {/* ── ÖLÇÜ VE NOTLAR ── */}
+            <Text style={styles.sectionHeader}>ÖLÇÜ VE NOTLAR</Text>
             <MeasurementPhotosField
               photos={photos}
               onChange={setPhotos}
@@ -707,7 +708,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     backgroundColor: colors.bgCard,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   header: {
@@ -715,54 +716,78 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  headerEyebrow: { color: 'rgba(255,255,255,0.7)', fontWeight: '800', fontSize: 10, letterSpacing: 2 },
-  headerTitle: { color: colors.textPrimary, fontWeight: '900', fontSize: 22, marginTop: 2 },
-  headerGoldLine: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, backgroundColor: colors.gold, opacity: 0.6 },
+  headerEyebrow: { color: colors.textMuted, fontWeight: '800', fontSize: 10, letterSpacing: 2 },
+  headerTitle: { color: colors.textPrimary, fontWeight: '900', fontSize: 20, marginTop: 3 },
   closeBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeTxt: { color: '#FFF', fontWeight: '700' },
+  closeTxt: { color: colors.textSecondary, fontWeight: '700' },
 
   body: { padding: spacing.xl, paddingBottom: spacing.xl },
   row2: { flexDirection: 'row', gap: spacing.md },
 
-  // ── Split toggle (kompakt satır) ─────────────────────────
-  splitToggle: {
+  // ── Section header (KİMLİK / ÖDEME PLANI vs.) ────────────
+  sectionHeader: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '800',
+    letterSpacing: 2,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  section: {
+    marginBottom: spacing.lg,
+  },
+
+  // ── iOS tarzı switch satırı ──────────────────────────────
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-    marginBottom: spacing.sm,
-    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    gap: 12,
   },
-  splitCheckbox: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
+  switchLabel: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  switchHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  switchTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    padding: 2,
     justifyContent: 'center',
   },
-  splitCheckboxActive: {
+  switchTrackOn: {
     backgroundColor: colors.gold,
-    borderColor: colors.gold,
   },
-  splitCheckmark: {
-    color: colors.primaryDeep,
-    fontWeight: '900',
-    fontSize: 10,
+  switchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 2,
   },
-  splitToggleTxt: {
-    color: colors.textMuted,
-    fontWeight: '700',
-    fontSize: 12,
+  switchThumbOn: {
+    transform: [{ translateX: 18 }],
   },
 
   // ── Split blok (kız/erkek tarafı) ────────────────────────
