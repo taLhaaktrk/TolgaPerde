@@ -8,6 +8,7 @@ import CanvasViewerModal from './CanvasViewerModal';
 import { formatPhoneTR } from '../../utils/format';
 import { sendStaleReminder } from '../../utils/whatsapp';
 import Alert from '../../utils/alert';
+import { SIDE_BRIDE, SIDE_GROOM, SIDE_LABEL, SIDE_SHORT } from '../../utils/customerSides';
 import { colors, gradients, radii, spacing, shadows } from '../../theme/colors';
 
 // Eşik: bu kadar gün ödeme yoksa uyarı rozeti çık.
@@ -21,6 +22,17 @@ const toDate = (ts) => {
   if (ts instanceof Date) return ts;
   return null;
 };
+
+// paymentHistory dizisinden en son ödeme tarihini bulur (Date)
+function getLatestFromHistory(paymentHistory) {
+  if (!Array.isArray(paymentHistory) || paymentHistory.length === 0) return null;
+  let max = null;
+  for (const p of paymentHistory) {
+    const d = toDate(p.at);
+    if (d && (!max || d > max)) max = d;
+  }
+  return max;
+}
 
 const daysAgo = (date) => {
   if (!date) return null;
@@ -99,6 +111,35 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
   const isActive = daysFromOrder !== null && daysFromOrder >= 0 && daysFromOrder <= ACTIVE_CUSTOMER_DAYS;
 
   const canPay = (customer.remainingAmount || 0) > 0;
+  const isSplitCustomer = !!customer.isSplit && customer.sides;
+
+  // Ortak WhatsApp gönderici — her taraf için ayrı çağrılır.
+  const sendWaForSide = async ({ name, phone, remainingDebt, daysSince, hasPayment }) => {
+    if (!phone) {
+      Alert.alert(
+        'Telefon Yok',
+        `${name} için kayıtlı telefon numarası bulunmuyor. Önce müşteri kartını düzenleyip telefonu ekle.`,
+        [{ text: 'Tamam' }],
+        { tone: 'warning' }
+      );
+      return;
+    }
+    const result = await sendStaleReminder({
+      customerName: name,
+      phone,
+      daysSince: daysSince || 0,
+      hasPayment: !!hasPayment,
+      remainingDebt,
+    });
+    if (!result.ok) {
+      Alert.alert(
+        'WhatsApp Açılamadı',
+        result.reason || 'Bilinmeyen hata',
+        [{ text: 'Tamam' }],
+        { tone: 'danger' }
+      );
+    }
+  };
 
   const handleWhatsApp = async () => {
     if (!customer.phone) {
@@ -214,6 +255,57 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
         </View>
       </View>
 
+      {/* ─── SPLIT (Kız/Erkek tarafı) görünüm ─── */}
+      {isSplitCustomer && (
+        <>
+          <SidePaymentBlock
+            sideKey={SIDE_BRIDE}
+            side={customer.sides.bride}
+            label={SIDE_LABEL[SIDE_BRIDE]}
+            accent={colors.gold}
+            customerName={customer.fullName}
+            orderDate={orderDate}
+            onWhatsApp={() => {
+              const b = customer.sides.bride;
+              const bLastPay = toDate(b.lastPaymentAt) || getLatestFromHistory(b.paymentHistory);
+              const bDaysSince = bLastPay ? daysAgo(bLastPay) : daysSinceOrder;
+              sendWaForSide({
+                name: `${customer.fullName} (${SIDE_SHORT[SIDE_BRIDE]})`,
+                phone: b.phone,
+                remainingDebt: b.remainingAmount || 0,
+                daysSince: bDaysSince,
+                hasPayment: !!bLastPay,
+              });
+            }}
+            onPayment={() => onPayment?.(SIDE_BRIDE)}
+          />
+          <SidePaymentBlock
+            sideKey={SIDE_GROOM}
+            side={customer.sides.groom}
+            label={SIDE_LABEL[SIDE_GROOM]}
+            accent={colors.info}
+            customerName={customer.fullName}
+            orderDate={orderDate}
+            onWhatsApp={() => {
+              const g = customer.sides.groom;
+              const gLastPay = toDate(g.lastPaymentAt) || getLatestFromHistory(g.paymentHistory);
+              const gDaysSince = gLastPay ? daysAgo(gLastPay) : daysSinceOrder;
+              sendWaForSide({
+                name: `${customer.fullName} (${SIDE_SHORT[SIDE_GROOM]})`,
+                phone: g.phone,
+                remainingDebt: g.remainingAmount || 0,
+                daysSince: gDaysSince,
+                hasPayment: !!gLastPay,
+              });
+            }}
+            onPayment={() => onPayment?.(SIDE_GROOM)}
+          />
+        </>
+      )}
+
+      {/* ─── Tekli görünüm (split değilse) ─── */}
+      {!isSplitCustomer && (
+      <>
       {/* Sipariş + son ödeme bilgileri */}
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
@@ -322,6 +414,8 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
         </View>
         <Text style={styles.remainingValue}>{formatTL(customer.remainingAmount)}</Text>
       </View>
+      </>
+      )}
 
       {!!customer.notes && (
         <View style={styles.notesBox}>
@@ -383,6 +477,7 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
         </View>
       )}
 
+      {!isSplitCustomer && (
       <View style={styles.actionsRow}>
         {canPay && (
           <TouchableOpacity
@@ -401,7 +496,7 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
         )}
         <TouchableOpacity
           activeOpacity={canPay ? 0.85 : 1}
-          onPress={canPay ? onPayment : null}
+          onPress={canPay ? () => onPayment?.() : null}
           disabled={!canPay}
           style={styles.payActionBtn}
         >
@@ -420,9 +515,145 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
           </LinearGradient>
         </TouchableOpacity>
       </View>
+      )}
     </View>
   );
 }
+
+// ─── Split modu: tek taraf (kız veya erkek) için özet + aksiyon ───
+function SidePaymentBlock({ side, label, accent, customerName, orderDate, onWhatsApp, onPayment }) {
+  if (!side) return null;
+  const sideRemaining = side.remainingAmount || 0;
+  const sideCanPay = sideRemaining > 0;
+  const sideLastPay = toDate(side.lastPaymentAt) || getLatestFromHistory(side.paymentHistory);
+  const sideDaysSincePay = sideLastPay ? daysAgo(sideLastPay) : null;
+
+  const historyCount = Array.isArray(side.paymentHistory) ? side.paymentHistory.length : 0;
+
+  return (
+    <View style={[splitStyles.block, { borderLeftColor: accent }]}>
+      <View style={splitStyles.header}>
+        <Text style={[splitStyles.label, { color: accent }]}>{label}</Text>
+        {!!side.phone && (
+          <Text style={splitStyles.phone}>{formatPhoneTR(side.phone)}</Text>
+        )}
+      </View>
+
+      {/* Meta: son ödeme */}
+      <View style={splitStyles.metaRow}>
+        <Text style={splitStyles.metaLabel}>SON ÖDEME</Text>
+        {sideLastPay ? (
+          <Text style={splitStyles.metaValue}>
+            {formatDateShort(sideLastPay)} · {sideDaysSincePay} gün önce
+          </Text>
+        ) : (
+          <Text style={[splitStyles.metaValue, { color: colors.textMuted }]}>Hiç ödeme yok</Text>
+        )}
+      </View>
+
+      {/* Hesap özeti */}
+      <View style={splitStyles.summaryRow}>
+        <Text style={splitStyles.summaryTxt}>Bu tarafın toplamı: <Text style={splitStyles.summaryBold}>{formatTL(side.totalAmount)}</Text></Text>
+      </View>
+      {(side.deposit || 0) > 0 && (
+        <View style={splitStyles.summaryRow}>
+          <Text style={splitStyles.summaryTxt}>Peşinat: − {formatTL(side.deposit)}</Text>
+        </View>
+      )}
+      {historyCount > 0 && (
+        <View style={splitStyles.summaryRow}>
+          <Text style={splitStyles.summaryTxt}>{historyCount} taksit ödendi</Text>
+        </View>
+      )}
+
+      {/* Kalan borç — büyük */}
+      <View style={[splitStyles.remainingBox, { borderColor: accent }]}>
+        <Text style={[splitStyles.remainingLabel, { color: accent }]}>KALAN BORÇ</Text>
+        <Text style={[splitStyles.remainingValue, { color: sideCanPay ? colors.danger : colors.success }]}>
+          {formatTL(sideRemaining)}
+        </Text>
+      </View>
+
+      {/* Aksiyonlar */}
+      <View style={splitStyles.actions}>
+        {sideCanPay && (
+          <TouchableOpacity activeOpacity={0.85} onPress={onWhatsApp} style={splitStyles.waBtn}>
+            <LinearGradient
+              colors={['#25D366', '#1EB055']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={splitStyles.waBtnTxt}>WhatsApp</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          activeOpacity={sideCanPay ? 0.85 : 1}
+          onPress={sideCanPay ? onPayment : null}
+          disabled={!sideCanPay}
+          style={{ flex: 1 }}
+        >
+          <LinearGradient
+            colors={sideCanPay ? gradients.goldButton : ['#3A3F50', '#2A2F3C']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={splitStyles.payBtn}
+          >
+            <Text style={[splitStyles.payBtnTxt, !sideCanPay && { color: colors.textMuted }]}>
+              {sideCanPay ? 'Ödeme Al' : 'Ödendi'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const splitStyles = StyleSheet.create({
+  block: {
+    borderLeftWidth: 4,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  label: { fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+  phone: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  metaLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '800', letterSpacing: 1 },
+  metaValue: { fontSize: 12, color: colors.textPrimary, fontWeight: '700' },
+  summaryRow: { paddingVertical: 3 },
+  summaryTxt: { fontSize: 12, color: colors.textSecondary },
+  summaryBold: { color: colors.textPrimary, fontWeight: '800' },
+  remainingBox: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    backgroundColor: 'rgba(226,92,92,0.08)',
+    alignItems: 'center',
+  },
+  remainingLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.5 },
+  remainingValue: { fontSize: 18, fontWeight: '900', marginTop: 2 },
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  waBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  waBtnTxt: { color: '#FFF', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
+  payBtn: {
+    paddingVertical: 12,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payBtnTxt: { color: colors.primaryDeep, fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
+});
 
 const styles = StyleSheet.create({
   card: {

@@ -26,7 +26,7 @@ import { colors, gradients, radii, spacing, shadows } from '../../theme/colors';
 const formatTL = (n) =>
   (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₺';
 
-export default function PaymentModal({ visible, customer, onClose, onPaid }) {
+export default function PaymentModal({ visible, customer, side, onClose, onPaid }) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState(PAYMENT_CASH);
   const [note, setNote] = useState('');
@@ -41,7 +41,10 @@ export default function PaymentModal({ visible, customer, onClose, onPaid }) {
   }, [visible]);
 
   if (!customer) return null;
-  const remaining = customer.remainingAmount || 0;
+  // Split müşteride belirtilen tarafın kalan borcunu kullan
+  const sideData = (side && customer.isSplit && customer.sides) ? customer.sides[side] : null;
+  const remaining = sideData ? (sideData.remainingAmount || 0) : (customer.remainingAmount || 0);
+  const sideLabelTr = side === 'bride' ? 'Kız Tarafı' : (side === 'groom' ? 'Erkek Tarafı' : null);
 
   const handleConfirm = async () => {
     const value = parseAmountTR(amount);
@@ -65,8 +68,8 @@ export default function PaymentModal({ visible, customer, onClose, onPaid }) {
     }
     setBusy(true);
     try {
-      const result = await recordPayment(customer.id, value, method, note.trim());
-      onPaid?.(result);
+      const result = await recordPayment(customer.id, value, method, note.trim(), side);
+      onPaid?.({ ...result, side });
       onClose?.();
     } catch (e) {
       console.warn('Ödeme hatası:', e);
@@ -97,7 +100,7 @@ export default function PaymentModal({ visible, customer, onClose, onPaid }) {
             end={{ x: 1, y: 0 }}
             style={styles.header}
           >
-            <Text style={styles.headerEyebrow}>ÖDEME AL</Text>
+            <Text style={styles.headerEyebrow}>{sideLabelTr ? `ÖDEME AL · ${sideLabelTr.toUpperCase()}` : 'ÖDEME AL'}</Text>
             <Text style={styles.headerTitle}>{customer.fullName || '—'}</Text>
             <View style={styles.headerGoldLine} />
           </LinearGradient>

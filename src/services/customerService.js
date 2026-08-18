@@ -30,7 +30,7 @@ export const paymentMethodLabel = (m) =>
 
 // Tek doğruluk noktası: tüm yazımlar bu fonksiyondan geçer, şema her zaman aynı.
 function buildDocPayload({ customer, source, mediaUrl, extras }) {
-  return {
+  const payload = {
     fullName: customer.fullName || '',
     phone: customer.phone || '',
     totalAmount: customer.totalAmount || 0,
@@ -47,6 +47,36 @@ function buildDocPayload({ customer, source, mediaUrl, extras }) {
       : Timestamp.now(),
     createdAt: serverTimestamp(),
     ...(extras || {}),
+  };
+  // Split (kız/erkek tarafı) desteği — sadece isSplit=true ise ekle
+  if (customer.isSplit) payload.isSplit = true;
+  return payload;
+}
+
+// Split (kız/erkek) tarafın taksitlerini form yapısından firestore yapısına çevir.
+// side = { phone, totalAmount, deposit, remainingAmount, plannedInstallments, installments[] }
+// orderDate — sipariş tarihi (installmentPlan üretimi için)
+// isArchive — arşiv müşteri mi? (installmentPlan üretmez, sadece paymentHistory'yi geçer)
+function buildSideForFirestore(sideForm, orderDate, isArchive) {
+  const paymentHistory = normalizeInstallments(sideForm.installments || []);
+  const plannedCount = parseInt(sideForm.plannedInstallments, 10) || 0;
+  const installmentPlan = (plannedCount > 0 && paymentHistory.length === 0 && !isArchive)
+    ? buildInstallments({
+        orderDate: orderDate ? new Date(orderDate) : new Date(),
+        plannedCount,
+        totalDebt: sideForm.remainingAmount || 0,
+      })
+    : [];
+  const { lastPaymentAt, lastPaymentMethod } = latestPaymentInfo(paymentHistory);
+  return {
+    phone: sideForm.phone || '',
+    totalAmount: sideForm.totalAmount || 0,
+    deposit: sideForm.deposit || 0,
+    remainingAmount: sideForm.remainingAmount || 0,
+    plannedInstallments: plannedCount,
+    paymentHistory,
+    installmentPlan,
+    ...(lastPaymentAt ? { lastPaymentAt, lastPaymentMethod } : {}),
   };
 }
 
@@ -133,20 +163,40 @@ export async function saveCustomerWithPhotos({ customer, photos }) {
   const uploadResult = await uploadMeasurementPhotos(photos, customer.fullName);
   const photoUrls = uploadResult.map((r) => r.url);
   const photoPaths = uploadResult.map((r) => r.path);
-  const paymentHistory = normalizeInstallments(customer.installments);
-  // Arşivde taksit ödendiyse "Son Ödeme" bilgisi paymentHistory'nin max'ından gelir.
+
+  // ── SPLIT (kız/erkek tarafı) — her taraf kendi paymentHistory + installmentPlan'iyle
+  let sidesPayload = null;
+  let mergedPaymentHistory = null; // top-level istatistikler için birleştirilmiş liste
+  let mergedInstallmentPlan = null;
+  if (customer.isSplit && customer.split) {
+    const brideSide = buildSideForFirestore(customer.split.bride, customer.orderDate, false);
+    const groomSide = buildSideForFirestore(customer.split.groom, customer.orderDate, false);
+    sidesPayload = { bride: brideSide, groom: groomSide };
+    // Top-level birleştirilmiş liste (side tag'i ile) — yaklaşan taksitler için
+    mergedPaymentHistory = [
+      ...brideSide.paymentHistory.map((p) => ({ ...p, side: 'bride' })),
+      ...groomSide.paymentHistory.map((p) => ({ ...p, side: 'groom' })),
+    ];
+    mergedInstallmentPlan = [
+      ...brideSide.installmentPlan.map((p) => ({ ...p, side: 'bride' })),
+      ...groomSide.installmentPlan.map((p) => ({ ...p, side: 'groom' })),
+    ];
+  }
+
+  const paymentHistory = mergedPaymentHistory || normalizeInstallments(customer.installments);
   const { lastPaymentAt, lastPaymentMethod } = latestPaymentInfo(paymentHistory);
 
-  // Yeni müşteri (mode === 'new'): planlanan taksit sayısı varsa dinamik taksit
-  // planı üret. Arşivde (paymentHistory dolu) plan yok — geçmiş kayıt zaten geldi.
+  // Split yoksa eski akış — tek installmentPlan üret
   const plannedCount = parseInt(customer.plannedInstallments, 10) || 0;
-  const installmentPlan = (plannedCount > 0 && paymentHistory.length === 0)
-    ? buildInstallments({
-        orderDate: customer.orderDate ? new Date(customer.orderDate) : new Date(),
-        plannedCount,
-        totalDebt: customer.remainingAmount || 0,
-      })
-    : [];
+  const installmentPlan = mergedInstallmentPlan !== null
+    ? mergedInstallmentPlan
+    : ((plannedCount > 0 && paymentHistory.length === 0)
+        ? buildInstallments({
+            orderDate: customer.orderDate ? new Date(customer.orderDate) : new Date(),
+            plannedCount,
+            totalDebt: customer.remainingAmount || 0,
+          })
+        : []);
 
   const payload = buildDocPayload({
     customer,
@@ -157,6 +207,7 @@ export async function saveCustomerWithPhotos({ customer, photos }) {
       measurementPhotoPaths: photoPaths,
       paymentHistory,
       installmentPlan,
+      ...(sidesPayload ? { sides: sidesPayload } : {}),
       ...(lastPaymentAt
         ? { lastPaymentAt, lastPaymentMethod }
         : {}),
@@ -183,6 +234,8 @@ export async function saveCustomerWithPhotos({ customer, photos }) {
     createdAt: Timestamp.now(),
     paymentHistory,
     installmentPlan,
+    ...(customer.isSplit ? { isSplit: true } : {}),
+    ...(sidesPayload ? { sides: sidesPayload } : {}),
     ...(lastPaymentAt ? { lastPaymentAt, lastPaymentMethod } : {}),
   };
 
@@ -209,7 +262,20 @@ export async function updateCustomerWithPhotos({ customerId, customer, photos })
     ...uploadResult.map((r) => r.path),
   ];
 
-  const paymentHistory = normalizeInstallments(customer.installments);
+  // ── SPLIT (edit modu) — form split datası varsa taraflar üzerinden yeniden hesapla
+  let sidesUpdate = null;
+  let mergedPaymentHistoryUpd = null;
+  if (customer.isSplit && customer.split) {
+    const brideSide = buildSideForFirestore(customer.split.bride, customer.orderDate, false);
+    const groomSide = buildSideForFirestore(customer.split.groom, customer.orderDate, false);
+    sidesUpdate = { bride: brideSide, groom: groomSide };
+    mergedPaymentHistoryUpd = [
+      ...brideSide.paymentHistory.map((p) => ({ ...p, side: 'bride' })),
+      ...groomSide.paymentHistory.map((p) => ({ ...p, side: 'groom' })),
+    ];
+  }
+
+  const paymentHistory = mergedPaymentHistoryUpd || normalizeInstallments(customer.installments);
   const { lastPaymentAt: newLastAt, lastPaymentMethod: newLastMethod } = latestPaymentInfo(paymentHistory);
 
   // Mevcut doc'tan installmentPlan'i oku — düzenleme mevcut planı bozmasın.
@@ -236,6 +302,9 @@ export async function updateCustomerWithPhotos({ customerId, customer, photos })
     measurementPhotoPaths: finalPaths,
     paymentHistory,
     updatedAt: serverTimestamp(),
+    // Split alanları — açık/kapalı ikisini de sync et
+    isSplit: !!customer.isSplit,
+    ...(sidesUpdate ? { sides: sidesUpdate } : {}),
   };
   if (installmentPlan) updatePayload.installmentPlan = installmentPlan;
   // paymentHistory'den türetilen lastPaymentAt — düzenlemede de güncelle
@@ -301,7 +370,8 @@ export async function uploadMedia(localUri, storagePath, contentType = 'image/pn
 // Aktif bir müşterinin var olan kaydına ödeme uygula.
 // Ödeme türü (cash/card) ve tutar paymentHistory dizisine eklenir.
 // Negatif kalan oluşmasın diye 0'da clamp eder.
-export async function recordPayment(customerId, amount, method = PAYMENT_CASH, note = '') {
+// side: 'bride' | 'groom' | null (null = tekli müşteri veya top-level)
+export async function recordPayment(customerId, amount, method = PAYMENT_CASH, note = '', side = null) {
   if (!customerId) throw new Error('Müşteri ID gerekli');
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('Geçersiz ödeme tutarı');
 
@@ -310,9 +380,6 @@ export async function recordPayment(customerId, amount, method = PAYMENT_CASH, n
   if (!snap.exists()) throw new Error('Müşteri bulunamadı');
 
   const data = snap.data();
-  // Peşinat (deposit) sipariş günü alınan; sonradan ödemeler TAKSİT olarak ayrı tutulur.
-  // recordPayment artık SADECE remainingAmount'u düşürür + paymentHistory'ye ekler.
-  const newRemaining = Math.max((data.remainingAmount || 0) - amount, 0);
 
   // arrayUnion + Timestamp.now() — serverTimestamp dizi içinde çalışmıyor.
   const paymentEntry = {
@@ -321,6 +388,56 @@ export async function recordPayment(customerId, amount, method = PAYMENT_CASH, n
     at: Timestamp.now(),
     ...(note ? { note } : {}),
   };
+
+  // ── SPLIT modu: belirli bir tarafa ödeme uygula ──
+  if (side && data.isSplit && data.sides && data.sides[side]) {
+    const sideData = data.sides[side];
+    const sideNewRemaining = Math.max((sideData.remainingAmount || 0) - amount, 0);
+    const sideEntry = { ...paymentEntry };
+    const topLevelEntry = { ...paymentEntry, side };
+
+    // Diğer tarafın kalanı sabit — top-level toplam kalan = iki tarafın toplamı
+    const otherSide = side === 'bride' ? 'groom' : 'bride';
+    const otherRemaining = data.sides[otherSide]?.remainingAmount || 0;
+    const topLevelNewRemaining = sideNewRemaining + otherRemaining;
+
+    // Side.installmentPlan senkronizasyonu — sıradaki ödenmemiş taksitleri işaretle
+    const sidePlan = Array.isArray(sideData.installmentPlan) ? [...sideData.installmentPlan] : [];
+    if (sidePlan.length > 0) {
+      const planTotal = sidePlan.reduce((s, p) => s + (p.tutar || 0), 0);
+      const previouslyPaid = sidePlan
+        .filter((p) => p.odendiMi)
+        .reduce((s, p) => s + (p.tutar || 0), 0);
+      let needToMark = (planTotal - sideNewRemaining) - previouslyPaid;
+      for (let i = 0; i < sidePlan.length; i++) {
+        if (sidePlan[i].odendiMi) continue;
+        if (needToMark + 0.01 >= (sidePlan[i].tutar || 0)) {
+          sidePlan[i] = { ...sidePlan[i], odendiMi: true, odemeTarihi: Timestamp.now() };
+          needToMark -= sidePlan[i].tutar || 0;
+        }
+      }
+    }
+
+    const sideKey = `sides.${side}`;
+    const updatePayloadSplit = {
+      [`${sideKey}.remainingAmount`]: sideNewRemaining,
+      [`${sideKey}.lastPaymentAt`]: Timestamp.now(),
+      [`${sideKey}.lastPaymentMethod`]: method,
+      [`${sideKey}.paymentHistory`]: arrayUnion(sideEntry),
+      [`${sideKey}.installmentPlan`]: sidePlan,
+      remainingAmount: topLevelNewRemaining,
+      lastPaymentAt: serverTimestamp(),
+      lastPaymentMethod: method,
+      paymentHistory: arrayUnion(topLevelEntry),
+    };
+    await updateDoc(ref, updatePayloadSplit);
+    return { newRemaining: sideNewRemaining, paidAmount: amount, method, paymentEntry: sideEntry };
+  }
+
+  // ── Tekli müşteri (eski akış) ──
+  // Peşinat (deposit) sipariş günü alınan; sonradan ödemeler TAKSİT olarak ayrı tutulur.
+  // recordPayment artık SADECE remainingAmount'u düşürür + paymentHistory'ye ekler.
+  const newRemaining = Math.max((data.remainingAmount || 0) - amount, 0);
 
   const updatePayload = {
     remainingAmount: newRemaining,

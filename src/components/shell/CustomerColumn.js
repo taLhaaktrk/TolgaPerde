@@ -19,21 +19,49 @@ export default function CustomerColumn({ fullWidth = false }) {
     setActiveModule,
   } = useAppShell();
   const [payVisible, setPayVisible] = useState(false);
+  const [paymentSide, setPaymentSide] = useState(null); // 'bride' | 'groom' | null
   const [editVisible, setEditVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handlePaid = ({ newRemaining, paidAmount, method, paymentEntry }) => {
-    const updated = {
-      ...activeCustomer,
-      remainingAmount: newRemaining,
-      lastPaymentAt: new Date(),
-      lastPaymentMethod: method,
-      paymentHistory: [...(activeCustomer.paymentHistory || []), paymentEntry],
-    };
+  const handlePaid = ({ newRemaining, paidAmount, method, paymentEntry, side }) => {
+    // Split müşteride ilgili tarafın alanlarını güncelle, ayrıca top-level toplamı yenile
+    let updated;
+    if (side && activeCustomer.isSplit && activeCustomer.sides) {
+      const currentSide = activeCustomer.sides[side] || {};
+      const updatedSide = {
+        ...currentSide,
+        remainingAmount: newRemaining,
+        lastPaymentAt: new Date(),
+        lastPaymentMethod: method,
+        paymentHistory: [...(currentSide.paymentHistory || []), paymentEntry],
+      };
+      const otherSide = side === 'bride' ? 'groom' : 'bride';
+      const otherRemaining = activeCustomer.sides[otherSide]?.remainingAmount || 0;
+      updated = {
+        ...activeCustomer,
+        remainingAmount: newRemaining + otherRemaining,
+        lastPaymentAt: new Date(),
+        lastPaymentMethod: method,
+        paymentHistory: [...(activeCustomer.paymentHistory || []), { ...paymentEntry, side }],
+        sides: {
+          ...activeCustomer.sides,
+          [side]: updatedSide,
+        },
+      };
+    } else {
+      updated = {
+        ...activeCustomer,
+        remainingAmount: newRemaining,
+        lastPaymentAt: new Date(),
+        lastPaymentMethod: method,
+        paymentHistory: [...(activeCustomer.paymentHistory || []), paymentEntry],
+      };
+    }
     setActiveCustomer(updated);
+    const sideNote = side ? (side === 'bride' ? ' (Kız tarafı)' : ' (Erkek tarafı)') : '';
     Alert.alert(
       'Ödeme Alındı',
-      `${paidAmount.toLocaleString('tr-TR')} ₺ tutarındaki taksit başarıyla kaydedildi.\n\nKalan borç: ${newRemaining.toLocaleString('tr-TR')} ₺`,
+      `${paidAmount.toLocaleString('tr-TR')} ₺${sideNote} tutarındaki taksit başarıyla kaydedildi.\n\nKalan borç: ${newRemaining.toLocaleString('tr-TR')} ₺`,
       [{ text: 'Tamam' }],
       { tone: 'success' }
     );
@@ -106,7 +134,7 @@ export default function CustomerColumn({ fullWidth = false }) {
           <ActiveCustomerCard
             customer={activeCustomer}
             onClear={clearActiveCustomer}
-            onPayment={() => setPayVisible(true)}
+            onPayment={(side) => { setPaymentSide(side || null); setPayVisible(true); }}
             onEdit={() => setEditVisible(true)}
             onDelete={handleDelete}
           />
@@ -118,7 +146,8 @@ export default function CustomerColumn({ fullWidth = false }) {
       <PaymentModal
         visible={payVisible}
         customer={activeCustomer}
-        onClose={() => setPayVisible(false)}
+        side={paymentSide}
+        onClose={() => { setPayVisible(false); setPaymentSide(null); }}
         onPaid={handlePaid}
       />
 

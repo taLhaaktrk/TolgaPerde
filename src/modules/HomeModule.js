@@ -355,6 +355,54 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       ? '1 taksit bekliyor'
       : `${installments.length} taksit bekliyor`;
 
+  // Split müşteride tarafa göre alt gruplar oluştur
+  const isSplitCust = !!customer.isSplit && customer.sides;
+  const brideItems = isSplitCust ? installments.filter((it) => it.installment.side === 'bride') : [];
+  const groomItems = isSplitCust ? installments.filter((it) => it.installment.side === 'groom') : [];
+
+  // Belirli bir tarafın WhatsApp gönderimi
+  const sendSideWhatsApp = async (sideKey) => {
+    const sideData = customer.sides?.[sideKey];
+    const sideItems = sideKey === 'bride' ? brideItems : groomItems;
+    if (!sideData || sideItems.length === 0) return;
+    if (!sideData.phone) {
+      Alert.alert(
+        'Telefon Yok',
+        `${customer.fullName} — ${sideKey === 'bride' ? 'Kız Tarafı' : 'Erkek Tarafı'} için telefon kayıtlı değil.`,
+        [{ text: 'Tamam' }],
+        { tone: 'warning' }
+      );
+      return;
+    }
+    const sideOldest = sideItems[0];
+    const sideDue = new Date(sideOldest.dueDate); sideDue.setHours(0, 0, 0, 0);
+    const sideDiff = Math.round((sideDue.getTime() - todayMs) / 86400000);
+    const sideDaysOverdue = sideDiff < 0 ? Math.abs(sideDiff) : 0;
+    // Side içi installment sayısı = o tarafın kendi installmentPlan uzunluğu
+    const sideTotalPlanCount = Array.isArray(sideData.installmentPlan) ? sideData.installmentPlan.length : 0;
+    // Side içi installmentNo — bu taksitin o tarafın planındaki sırası
+    const sidePlan = Array.isArray(sideData.installmentPlan) ? sideData.installmentPlan : [];
+    const sideInstallmentNo = sidePlan.findIndex((p) => p.id === sideOldest.installment.id) + 1;
+    const result = await sendWhatsAppReminder({
+      customerName: `${customer.fullName} (${sideKey === 'bride' ? 'Kız' : 'Erkek'})`,
+      phone: sideData.phone,
+      amount: sideOldest.installment.tutar,
+      dueDate: sideOldest.dueDate,
+      installmentNo: sideInstallmentNo || undefined,
+      totalInstallments: sideTotalPlanCount || undefined,
+      remainingDebt: sideData.remainingAmount,
+      daysOverdue: sideDaysOverdue,
+    });
+    if (!result.ok) {
+      Alert.alert(
+        'WhatsApp Açılamadı',
+        result.reason || 'Bilinmeyen hata',
+        [{ text: 'Tamam' }],
+        { tone: 'danger' }
+      );
+    }
+  };
+
   const handleWhatsApp = async () => {
     if (!customer.phone) {
       Alert.alert(
@@ -418,9 +466,20 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
               diff < 0 ? `${Math.abs(diff)} gün gecikme` :
               diff === 0 ? 'Bugün' :
               `${diff} gün kaldı`;
+            const sideBadge = it.installment.side === 'bride'
+              ? { txt: 'K', color: colors.gold }
+              : it.installment.side === 'groom'
+                ? { txt: 'E', color: colors.info }
+                : null;
             return (
               <View key={it.installment.id} style={styles.expandedItem}>
-                <Text style={styles.expandedItemNo}>{it.installmentNo}.</Text>
+                {sideBadge ? (
+                  <View style={[styles.sideBadge, { backgroundColor: sideBadge.color }]}>
+                    <Text style={styles.sideBadgeTxt}>{sideBadge.txt}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.expandedItemNo}>{it.installmentNo}.</Text>
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.expandedItemDate}>
                     {new Date(it.dueDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -441,16 +500,46 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
         </View>
       )}
 
-      <TouchableOpacity activeOpacity={0.85} onPress={handleWhatsApp}>
-        <LinearGradient
-          colors={['#25D366', '#1EB055']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.waBtn}
-        >
-          <Text style={styles.waBtnTxt}>WHATSAPP İLE HATIRLAT</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+      {/* WhatsApp butonları — split ise 2 buton (Kız/Erkek), değilse tek */}
+      {isSplitCust ? (
+        <View style={styles.splitWaRow}>
+          {brideItems.length > 0 && (
+            <TouchableOpacity activeOpacity={0.85} onPress={() => sendSideWhatsApp('bride')} style={{ flex: 1 }}>
+              <LinearGradient
+                colors={['#25D366', '#1EB055']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.waBtn, { marginTop: 0 }]}
+              >
+                <Text style={styles.waBtnTxt}>KIZ TARAFI · WP</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+          {groomItems.length > 0 && (
+            <TouchableOpacity activeOpacity={0.85} onPress={() => sendSideWhatsApp('groom')} style={{ flex: 1 }}>
+              <LinearGradient
+                colors={['#25D366', '#1EB055']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.waBtn, { marginTop: 0 }]}
+              >
+                <Text style={styles.waBtnTxt}>ERKEK TARAFI · WP</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <TouchableOpacity activeOpacity={0.85} onPress={handleWhatsApp}>
+          <LinearGradient
+            colors={['#25D366', '#1EB055']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.waBtn}
+          >
+            <Text style={styles.waBtnTxt}>WHATSAPP İLE HATIRLAT</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -694,6 +783,25 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 12,
     letterSpacing: 1.6,
+  },
+
+  // Split (kız/erkek) — 2 WP butonu yan yana + side badge
+  splitWaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  sideBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideBadgeTxt: {
+    color: colors.primaryDeep,
+    fontWeight: '900',
+    fontSize: 11,
   },
 
   // Mobil swipe paneli — emojisiz, sade kırmızı "SİL"

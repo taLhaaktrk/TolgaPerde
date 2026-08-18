@@ -23,6 +23,7 @@ import {
 import { formatPhoneTR, formatAmountTR, parseAmountTR, capitalizeNameTR } from '../../utils/format';
 import { addMonths } from '../../utils/installments';
 import { colors, gradients, radii, spacing, shadows } from '../../theme/colors';
+import { SIDE_LABEL, SIDE_BRIDE, SIDE_GROOM } from '../../utils/customerSides';
 
 const formatDate = (d) =>
   d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -52,6 +53,21 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
   const [dateOpen, setDateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // ── Kız/Erkek tarafı split ──────────────────────────────────
+  const [isSplit, setIsSplit] = useState(false);
+  // Kız tarafı
+  const [bridePhone, setBridePhone] = useState('');
+  const [brideTotal, setBrideTotal] = useState('');
+  const [brideDeposit, setBrideDeposit] = useState('');
+  const [bridePlannedCount, setBridePlannedCount] = useState('');
+  const [brideInstallments, setBrideInstallments] = useState([]);
+  // Erkek tarafı
+  const [groomPhone, setGroomPhone] = useState('');
+  const [groomTotal, setGroomTotal] = useState('');
+  const [groomDeposit, setGroomDeposit] = useState('');
+  const [groomPlannedCount, setGroomPlannedCount] = useState('');
+  const [groomInstallments, setGroomInstallments] = useState([]);
+
   // Edit modu — modal her açıldığında mevcut müşteri verisini doldur.
   React.useEffect(() => {
     if (!visible) return;
@@ -79,6 +95,34 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
       setPlannedCount(editingCustomer.plannedInstallments ? String(editingCustomer.plannedInstallments) : '');
       const od = editingCustomer.orderDate?.toDate?.() || new Date();
       setOrderDate(od);
+
+      // ── Split verilerini yükle (varsa)
+      const split = !!editingCustomer.isSplit;
+      setIsSplit(split);
+      if (split) {
+        const b = editingCustomer.sides?.bride || {};
+        const g = editingCustomer.sides?.groom || {};
+        setBridePhone(formatPhoneTR(b.phone || ''));
+        setBrideTotal(b.totalAmount ? formatAmountTR(String(b.totalAmount)) : '');
+        setBrideDeposit(b.deposit ? formatAmountTR(String(b.deposit)) : '');
+        setBridePlannedCount(b.plannedInstallments ? String(b.plannedInstallments) : '');
+        setBrideInstallments((b.paymentHistory || []).map((p, i) => ({
+          id: `existing-bride-${i}-${Date.now()}`,
+          date: p.at?.toDate?.() || (p.at instanceof Date ? p.at : new Date()),
+          amount: String(p.amount || ''),
+          method: p.method || 'cash',
+        })));
+        setGroomPhone(formatPhoneTR(g.phone || ''));
+        setGroomTotal(g.totalAmount ? formatAmountTR(String(g.totalAmount)) : '');
+        setGroomDeposit(g.deposit ? formatAmountTR(String(g.deposit)) : '');
+        setGroomPlannedCount(g.plannedInstallments ? String(g.plannedInstallments) : '');
+        setGroomInstallments((g.paymentHistory || []).map((p, i) => ({
+          id: `existing-groom-${i}-${Date.now()}`,
+          date: p.at?.toDate?.() || (p.at instanceof Date ? p.at : new Date()),
+          amount: String(p.amount || ''),
+          method: p.method || 'cash',
+        })));
+      }
     } else if (visible && !isEditing) {
       // Yeni kayıt — temiz başla
       setInstallments([]);
@@ -102,6 +146,51 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
     [totalNum, depositNum, installmentsTotal]
   );
 
+  // ── Split hesaplamaları ─────────────────────────────────────
+  const brideTotalNum = parseAmount(brideTotal);
+  const brideDepositNum = parseAmount(brideDeposit);
+  const brideInstallmentsTotal = useMemo(
+    () => brideInstallments.reduce((s, it) => {
+      const n = parseFloat(String(it.amount).replace(',', '.'));
+      return s + (Number.isFinite(n) ? n : 0);
+    }, 0),
+    [brideInstallments]
+  );
+  const brideRemaining = Math.max(brideTotalNum - brideDepositNum - brideInstallmentsTotal, 0);
+
+  const groomTotalNum = parseAmount(groomTotal);
+  const groomDepositNum = parseAmount(groomDeposit);
+  const groomInstallmentsTotal = useMemo(
+    () => groomInstallments.reduce((s, it) => {
+      const n = parseFloat(String(it.amount).replace(',', '.'));
+      return s + (Number.isFinite(n) ? n : 0);
+    }, 0),
+    [groomInstallments]
+  );
+  const groomRemaining = Math.max(groomTotalNum - groomDepositNum - groomInstallmentsTotal, 0);
+
+  // Split açıkken bir tarafa yazınca diğer taraf otomatik tamamlansın (Toplam - girilen).
+  // Kullanıcı sadece bir tarafı doldurduğunda diğerini otomatik doldur.
+  const handleBrideTotalChange = (v) => {
+    const formatted = formatAmountTR(v);
+    setBrideTotal(formatted);
+    // Ana toplam varsa erkek tarafını otomatik tamamla
+    if (totalNum > 0) {
+      const brideNum = parseAmount(formatted);
+      const remainderForGroom = Math.max(totalNum - brideNum, 0);
+      setGroomTotal(remainderForGroom > 0 ? formatAmountTR(String(remainderForGroom)) : '');
+    }
+  };
+  const handleGroomTotalChange = (v) => {
+    const formatted = formatAmountTR(v);
+    setGroomTotal(formatted);
+    if (totalNum > 0) {
+      const groomNum = parseAmount(formatted);
+      const remainderForBride = Math.max(totalNum - groomNum, 0);
+      setBrideTotal(remainderForBride > 0 ? formatAmountTR(String(remainderForBride)) : '');
+    }
+  };
+
   const reset = () => {
     setFullName('');
     setPhone('');
@@ -113,6 +202,10 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
     setPlannedCount('');
     setOrderDate(new Date());
     setDateOpen(false);
+    // split state reset
+    setIsSplit(false);
+    setBridePhone(''); setBrideTotal(''); setBrideDeposit(''); setBridePlannedCount(''); setBrideInstallments([]);
+    setGroomPhone(''); setGroomTotal(''); setGroomDeposit(''); setGroomPlannedCount(''); setGroomInstallments([]);
   };
 
   const handleClose = () => {
@@ -131,14 +224,32 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
       );
       return;
     }
+    // Split validation — açıksa iki tarafın toplamı ana toplamı geçmesin
+    if (isSplit && (brideTotalNum + groomTotalNum) > totalNum + 0.5) {
+      Alert.alert(
+        'Split Tutar Hatası',
+        `Kız (${brideTotalNum.toLocaleString('tr-TR')} ₺) + Erkek (${groomTotalNum.toLocaleString('tr-TR')} ₺) toplamı ana toplam (${totalNum.toLocaleString('tr-TR')} ₺) tutardan fazla olamaz.`,
+        [{ text: 'Tamam' }],
+        { tone: 'warning' }
+      );
+      return;
+    }
+
     setBusy(true);
     try {
+      // Ana müşteri payload'ı — split ise top-level fieldlar TOPLAM olarak gider
+      // (istatistikler eski akışla çalışmaya devam etsin).
+      // Ana telefon: split ise kız tarafının telefonu (yoksa erkek).
+      const mainPhone = isSplit
+        ? ((bridePhone || groomPhone).replace(/\s/g, '').trim())
+        : phone.replace(/\s/g, '').trim();
+
       const customer = {
         fullName: fullName.trim(),
-        phone: phone.replace(/\s/g, '').trim(), // depolamada sadece rakam, görünümde format
+        phone: mainPhone,
         totalAmount: totalNum,
-        deposit: depositNum,
-        remainingAmount: remaining,
+        deposit: isSplit ? (brideDepositNum + groomDepositNum) : depositNum,
+        remainingAmount: isSplit ? (brideRemaining + groomRemaining) : remaining,
         notes: notes.trim(),
         orderDate: orderDate.toISOString(),
         // Arşiv (eski müşteri): geçmiş taksit listesi. Yeni müşteri: boş.
@@ -147,6 +258,32 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
           : [],
         // Yeni müşteri: planlanan taksit sayısı (not). Arşivde 0.
         plannedInstallments: isArchive ? 0 : (parseInt(plannedCount, 10) || 0),
+        // ── Split bilgisi ──
+        isSplit,
+        ...(isSplit ? {
+          split: {
+            bride: {
+              phone: bridePhone.replace(/\s/g, '').trim(),
+              totalAmount: brideTotalNum,
+              deposit: brideDepositNum,
+              remainingAmount: brideRemaining,
+              plannedInstallments: isArchive ? 0 : (parseInt(bridePlannedCount, 10) || 0),
+              installments: isArchive
+                ? brideInstallments.map((it) => ({ date: it.date, amount: it.amount, method: it.method }))
+                : [],
+            },
+            groom: {
+              phone: groomPhone.replace(/\s/g, '').trim(),
+              totalAmount: groomTotalNum,
+              deposit: groomDepositNum,
+              remainingAmount: groomRemaining,
+              plannedInstallments: isArchive ? 0 : (parseInt(groomPlannedCount, 10) || 0),
+              installments: isArchive
+                ? groomInstallments.map((it) => ({ date: it.date, amount: it.amount, method: it.method }))
+                : [],
+            },
+          },
+        } : {}),
       };
 
       let result;
@@ -215,19 +352,21 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                 label="Ad Soyad"
                 value={fullName}
                 onChangeText={(v) => setFullName(capitalizeNameTR(v))}
-                placeholder="Örn. Ayşe Yılmaz"
+                placeholder={isSplit ? 'Örn. Ayşe & Mehmet Düğün' : 'Örn. Ayşe Yılmaz'}
                 autoCapitalize="words"
-                style={{ flex: 1.4 }}
+                style={{ flex: isSplit ? 1 : 1.4 }}
               />
-              <Field
-                label="Telefon"
-                value={phone}
-                onChangeText={(v) => setPhone(formatPhoneTR(v))}
-                placeholder="05XX XXX XXXX"
-                keyboardType="phone-pad"
-                maxLength={13}
-                style={{ flex: 1 }}
-              />
+              {!isSplit && (
+                <Field
+                  label="Telefon"
+                  value={phone}
+                  onChangeText={(v) => setPhone(formatPhoneTR(v))}
+                  placeholder="05XX XXX XXXX"
+                  keyboardType="phone-pad"
+                  maxLength={13}
+                  style={{ flex: 1 }}
+                />
+              )}
             </View>
 
             <View style={styles.row2}>
@@ -239,15 +378,71 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                 keyboardType="number-pad"
                 style={{ flex: 1 }}
               />
-              <Field
-                label="Alınan Peşinat (₺)"
-                value={deposit}
-                onChangeText={(v) => setDeposit(formatAmountTR(v))}
-                placeholder="0"
-                keyboardType="number-pad"
-                style={{ flex: 1 }}
-              />
+              {!isSplit && (
+                <Field
+                  label="Alınan Peşinat (₺)"
+                  value={deposit}
+                  onChangeText={(v) => setDeposit(formatAmountTR(v))}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  style={{ flex: 1 }}
+                />
+              )}
             </View>
+
+            {/* Split toggle — Kız/Erkek tarafı ayrı hesap */}
+            <TouchableOpacity
+              onPress={() => setIsSplit((v) => !v)}
+              activeOpacity={0.7}
+              style={[styles.splitToggle, isSplit && styles.splitToggleActive]}
+              disabled={busy}
+            >
+              <View style={[styles.splitCheckbox, isSplit && styles.splitCheckboxActive]}>
+                {isSplit && <Text style={styles.splitCheckmark}>✓</Text>}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.splitToggleTitle}>Kız / Erkek Tarafı Ayrı Hesap</Text>
+                <Text style={styles.splitToggleHint}>
+                  Ödemeler iki tarafa bölünsün, her taraf için ayrı telefon ve taksit
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Split alanları — iki taraf */}
+            {isSplit && (
+              <>
+                <SideBlock
+                  label="KIZ TARAFI"
+                  accent={colors.gold}
+                  phone={bridePhone} onPhoneChange={(v) => setBridePhone(formatPhoneTR(v))}
+                  amount={brideTotal} onAmountChange={handleBrideTotalChange}
+                  deposit={brideDeposit} onDepositChange={(v) => setBrideDeposit(formatAmountTR(v))}
+                  plannedCount={bridePlannedCount} onPlannedChange={setBridePlannedCount}
+                  installments={brideInstallments} onInstallmentsChange={setBrideInstallments}
+                  isArchive={isArchive}
+                  remaining={brideRemaining}
+                  installmentsTotal={brideInstallmentsTotal}
+                  totalNum={brideTotalNum}
+                  depositNum={brideDepositNum}
+                  busy={busy}
+                />
+                <SideBlock
+                  label="ERKEK TARAFI"
+                  accent={colors.info}
+                  phone={groomPhone} onPhoneChange={(v) => setGroomPhone(formatPhoneTR(v))}
+                  amount={groomTotal} onAmountChange={handleGroomTotalChange}
+                  deposit={groomDeposit} onDepositChange={(v) => setGroomDeposit(formatAmountTR(v))}
+                  plannedCount={groomPlannedCount} onPlannedChange={setGroomPlannedCount}
+                  installments={groomInstallments} onInstallmentsChange={setGroomInstallments}
+                  isArchive={isArchive}
+                  remaining={groomRemaining}
+                  installmentsTotal={groomInstallmentsTotal}
+                  totalNum={groomTotalNum}
+                  depositNum={groomDepositNum}
+                  busy={busy}
+                />
+              </>
+            )}
 
             <View style={{ marginBottom: spacing.md }}>
               <Text style={styles.fieldLabel}>Sipariş Tarihi</Text>
@@ -299,54 +494,68 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
               )}
             </View>
 
-            {isArchive ? (
-              // ESKİ MÜŞTERİ: geçmişte ödenen taksitlerin tam listesi
-              <InstallmentsField
-                installments={installments}
-                onChange={setInstallments}
-                disabled={busy}
-              />
-            ) : (
-              // YENİ MÜŞTERİ: sadece planlanan taksit sayısı (stepper ile)
-              <View style={{ marginBottom: spacing.md }}>
-                <Text style={styles.fieldLabel}>Planlanan Taksit Sayısı (opsiyonel)</Text>
-                <NumberStepper
-                  value={plannedCount}
-                  onChange={setPlannedCount}
-                  min={0}
-                  max={36}
+            {!isSplit && (
+              isArchive ? (
+                // ESKİ MÜŞTERİ: geçmişte ödenen taksitlerin tam listesi
+                <InstallmentsField
+                  installments={installments}
+                  onChange={setInstallments}
                   disabled={busy}
                 />
-                {(() => {
-                  const n = parseInt(plannedCount, 10) || 0;
-                  if (n <= 0 || remaining <= 0) return null;
-                  const per = remaining / n;
-                  const firstDue = addMonths(orderDate, 1);
-                  return (
-                    <View style={styles.planPreview}>
-                      <Text style={styles.planPreviewIcon}>📅</Text>
-                      <Text style={styles.planPreviewTxt}>
-                        İlk taksit <Text style={styles.planPreviewBold}>{formatDate(firstDue)}</Text>
-                        {'\n'}Her ay <Text style={styles.planPreviewBold}>{formatTL(per)}</Text> · toplam {n} ödeme
-                      </Text>
-                    </View>
-                  );
-                })()}
-              </View>
+              ) : (
+                // YENİ MÜŞTERİ: sadece planlanan taksit sayısı (stepper ile)
+                <View style={{ marginBottom: spacing.md }}>
+                  <Text style={styles.fieldLabel}>Planlanan Taksit Sayısı (opsiyonel)</Text>
+                  <NumberStepper
+                    value={plannedCount}
+                    onChange={setPlannedCount}
+                    min={0}
+                    max={36}
+                    disabled={busy}
+                  />
+                  {(() => {
+                    const n = parseInt(plannedCount, 10) || 0;
+                    if (n <= 0 || remaining <= 0) return null;
+                    const per = remaining / n;
+                    const firstDue = addMonths(orderDate, 1);
+                    return (
+                      <View style={styles.planPreview}>
+                        <Text style={styles.planPreviewIcon}>📅</Text>
+                        <Text style={styles.planPreviewTxt}>
+                          İlk taksit <Text style={styles.planPreviewBold}>{formatDate(firstDue)}</Text>
+                          {'\n'}Her ay <Text style={styles.planPreviewBold}>{formatTL(per)}</Text> · toplam {n} ödeme
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+              )
             )}
 
-            <View style={styles.remainingBox}>
-              <View style={styles.remainingBreakdown}>
-                <Text style={styles.breakdownTxt}>Toplam {formatTL(totalNum)}</Text>
-                <Text style={styles.breakdownMinus}>− Peşinat {formatTL(depositNum)}</Text>
-                {isArchive && (
-                  <Text style={styles.breakdownMinus}>− Taksitler {formatTL(installmentsTotal)}</Text>
-                )}
+            {isSplit ? (
+              <View style={styles.remainingBox}>
+                <View style={styles.remainingBreakdown}>
+                  <Text style={styles.breakdownTxt}>Kız Tarafı Kalan {formatTL(brideRemaining)}</Text>
+                  <Text style={styles.breakdownTxt}>Erkek Tarafı Kalan {formatTL(groomRemaining)}</Text>
+                </View>
+                <View style={styles.remainingDivider} />
+                <Text style={styles.remainingLabel}>TOPLAM KALAN BORÇ</Text>
+                <Text style={styles.remainingValue}>{formatTL(brideRemaining + groomRemaining)}</Text>
               </View>
-              <View style={styles.remainingDivider} />
-              <Text style={styles.remainingLabel}>KALAN BORÇ</Text>
-              <Text style={styles.remainingValue}>{formatTL(remaining)}</Text>
-            </View>
+            ) : (
+              <View style={styles.remainingBox}>
+                <View style={styles.remainingBreakdown}>
+                  <Text style={styles.breakdownTxt}>Toplam {formatTL(totalNum)}</Text>
+                  <Text style={styles.breakdownMinus}>− Peşinat {formatTL(depositNum)}</Text>
+                  {isArchive && (
+                    <Text style={styles.breakdownMinus}>− Taksitler {formatTL(installmentsTotal)}</Text>
+                  )}
+                </View>
+                <View style={styles.remainingDivider} />
+                <Text style={styles.remainingLabel}>KALAN BORÇ</Text>
+                <Text style={styles.remainingValue}>{formatTL(remaining)}</Text>
+              </View>
+            )}
 
             <MeasurementPhotosField
               photos={photos}
@@ -423,6 +632,79 @@ function Field({ label, style, ...inputProps }) {
   );
 }
 
+// ── Kız/Erkek tarafı için tek blok ─────────────────────────
+function SideBlock({
+  label, accent,
+  phone, onPhoneChange,
+  amount, onAmountChange,
+  deposit, onDepositChange,
+  plannedCount, onPlannedChange,
+  installments, onInstallmentsChange,
+  isArchive, busy,
+  remaining, installmentsTotal, totalNum, depositNum,
+}) {
+  return (
+    <View style={[styles.sideBlock, { borderLeftColor: accent }]}>
+      <Text style={[styles.sideBlockLabel, { color: accent }]}>{label}</Text>
+      <View style={styles.row2}>
+        <Field
+          label="Telefon"
+          value={phone}
+          onChangeText={onPhoneChange}
+          placeholder="05XX XXX XXXX"
+          keyboardType="phone-pad"
+          maxLength={13}
+          style={{ flex: 1 }}
+        />
+        <Field
+          label="Bu Tarafın Tutarı (₺)"
+          value={amount}
+          onChangeText={onAmountChange}
+          placeholder="0"
+          keyboardType="number-pad"
+          style={{ flex: 1 }}
+        />
+      </View>
+      <View style={styles.row2}>
+        <Field
+          label="Peşinat (₺)"
+          value={deposit}
+          onChangeText={onDepositChange}
+          placeholder="0"
+          keyboardType="number-pad"
+          style={{ flex: 1 }}
+        />
+        <View style={{ flex: 1 }} />
+      </View>
+      {isArchive ? (
+        <InstallmentsField
+          installments={installments}
+          onChange={onInstallmentsChange}
+          disabled={busy}
+        />
+      ) : (
+        <View style={{ marginBottom: spacing.md }}>
+          <Text style={styles.fieldLabel}>Planlanan Taksit Sayısı</Text>
+          <NumberStepper
+            value={plannedCount}
+            onChange={onPlannedChange}
+            min={0}
+            max={36}
+            disabled={busy}
+          />
+        </View>
+      )}
+      <View style={styles.sideBlockSummary}>
+        <Text style={styles.sideBlockSumTxt}>
+          Bu taraf kalan: <Text style={{ color: accent, fontWeight: '900' }}>
+            {(remaining || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺
+          </Text>
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -462,6 +744,79 @@ const styles = StyleSheet.create({
 
   body: { padding: spacing.xl, paddingBottom: spacing.xl },
   row2: { flexDirection: 'row', gap: spacing.md },
+
+  // ── Split toggle ─────────────────────────────────────────
+  splitToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.md,
+    backgroundColor: colors.bgInput,
+    marginBottom: spacing.md,
+  },
+  splitToggleActive: {
+    borderColor: colors.gold,
+    backgroundColor: 'rgba(201,169,97,0.08)',
+  },
+  splitCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splitCheckboxActive: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+  splitCheckmark: {
+    color: colors.primaryDeep,
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  splitToggleTitle: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  splitToggleHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  // ── Split blok (kız/erkek tarafı) ────────────────────────
+  sideBlock: {
+    borderLeftWidth: 3,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  sideBlockLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: spacing.sm,
+  },
+  sideBlockSummary: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  sideBlockSumTxt: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 
   fieldLabel: {
     fontSize: 11,
