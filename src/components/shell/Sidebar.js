@@ -10,6 +10,7 @@ import {
   MODULE_CUSTOMERS,
   MODULE_REPORTS,
   MODULE_DESIGN,
+  MODULE_SETTINGS,
 } from '../../context/AppShellContext';
 import { useAuth, ROLE_EMPLOYEE } from '../../context/AuthContext';
 import useDeviceType from '../../hooks/useDeviceType';
@@ -22,6 +23,7 @@ const RAIL_ITEMS = [
   { id: MODULE_CUSTOMERS, label: 'Müşteriler' },
   { id: MODULE_REPORTS, label: 'Raporlar', hideForEmployee: true },
   { id: MODULE_DESIGN, label: 'Tasarım', requiresDraw: true, hideForEmployee: true },
+  { id: MODULE_SETTINGS, label: 'Ayarlar', hideForEmployee: true },
 ];
 
 export default function Sidebar() {

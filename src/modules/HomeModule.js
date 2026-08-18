@@ -7,7 +7,6 @@ import Dropdown from '../components/ui/Dropdown';
 import Alert from '../utils/alert';
 import useCustomers from '../hooks/useCustomers';
 import useDeviceType from '../hooks/useDeviceType';
-import useVersionCheck from '../hooks/useVersionCheck';
 import {
   useAppShell,
   MODULE_CUSTOMERS,
@@ -55,7 +54,6 @@ export default function HomeModule() {
   const { setActiveModule, setActiveCustomer } = useAppShell();
   const { isPhone } = useDeviceType();
   const [threshold, setThreshold] = useState(30); // gün cinsinden, varsayılan 1 ay
-  const versionInfo = useVersionCheck();
 
   const stats = useMemo(() => {
     const debtors = customers.filter((c) => (c.remainingAmount || 0) > 0);
@@ -249,23 +247,6 @@ export default function HomeModule() {
             onPress={() => setActiveModule(MODULE_CUSTOMERS)}
           />
         </View>
-
-        {/* Sürüm göstergesi + manuel yenile — kullanıcı istediğinde tazeleyebilir */}
-        {versionInfo.bundledVersion && (
-          <TouchableOpacity
-            onPress={versionInfo.reload}
-            activeOpacity={0.6}
-            style={styles.versionRow}
-          >
-            <Text style={styles.versionTxt}>
-              Sürüm: {versionInfo.bundledVersion}
-              {versionInfo.latestVersion && versionInfo.latestVersion !== versionInfo.bundledVersion
-                ? `  →  ${versionInfo.latestVersion} mevcut`
-                : ''}
-            </Text>
-            <Text style={styles.versionRefresh}>↻ Yenile</Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
     </View>
   );
@@ -927,28 +908,4 @@ const styles = StyleSheet.create({
   actionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   actionDesc: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
   actionChev: { color: colors.textMuted, fontSize: 22, marginLeft: 12 },
-
-  // Sürüm satırı — Ana Sayfa'nın en altında, manuel yenile için
-  versionRow: {
-    marginTop: spacing.xxl,
-    paddingVertical: 12,
-    paddingHorizontal: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  versionTxt: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  versionRefresh: {
-    color: colors.gold,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
 });

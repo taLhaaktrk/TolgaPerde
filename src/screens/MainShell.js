@@ -11,6 +11,7 @@ import CustomersModule from '../modules/CustomersModule';
 import ReportsModule from '../modules/ReportsModule';
 import DesignModule from '../modules/DesignModule';
 import PhotoModule from '../modules/PhotoModule';
+import SettingsModule from '../modules/SettingsModule';
 import {
   useAppShell,
   MODULE_HOME,
@@ -18,6 +19,7 @@ import {
   MODULE_REPORTS,
   MODULE_DESIGN,
   MODULE_PHOTO,
+  MODULE_SETTINGS,
 } from '../context/AppShellContext';
 import useDeviceType from '../hooks/useDeviceType';
 import { useAuth, ROLE_EMPLOYEE } from '../context/AuthContext';
@@ -39,6 +41,8 @@ function renderModule(moduleId, canDraw, isEmployee) {
       return canDraw ? <DesignModule /> : <HomeModule />;
     case MODULE_PHOTO:
       return <PhotoModule />;
+    case MODULE_SETTINGS:
+      return <SettingsModule />;
     case MODULE_HOME:
     default:
       return <HomeModule />;

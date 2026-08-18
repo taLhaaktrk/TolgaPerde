@@ -5,6 +5,7 @@ export const MODULE_CUSTOMERS = 'customers';
 export const MODULE_REPORTS = 'reports';
 export const MODULE_DESIGN = 'design';
 export const MODULE_PHOTO = 'photo';
+export const MODULE_SETTINGS = 'settings';
 
 const AppShellContext = createContext(null);
 
