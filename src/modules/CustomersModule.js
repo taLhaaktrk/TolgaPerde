@@ -190,15 +190,9 @@ function CustomerRow({ customer, active, onPress }) {
   if (noteStr) metaParts.push(noteStr);
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={[styles.row, active && styles.rowActive, shadows.sm]}>
-      <LinearGradient
-        colors={active ? gradients.activeRail : gradients.cardSubtle}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[styles.avatar, active && { borderColor: colors.gold }]}>
-        <Text style={styles.avatarTxt}>{initials(customer.fullName)}</Text>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={[styles.row, active && styles.rowActive]}>
+      <View style={[styles.avatar, active && styles.avatarActive]}>
+        <Text style={[styles.avatarTxt, active && { color: colors.primaryDeep }]}>{initials(customer.fullName)}</Text>
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={styles.name} numberOfLines={1}>{customer.fullName || '—'}</Text>
@@ -210,7 +204,6 @@ function CustomerRow({ customer, active, onPress }) {
         <Text style={styles.amountLabel}>Kalan</Text>
         <Text style={styles.amountVal}>{formatTL(customer.remainingAmount)}</Text>
       </View>
-      <Text style={styles.chev}>›</Text>
     </TouchableOpacity>
   );
 }
@@ -337,10 +330,10 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgInput,
-    borderRadius: radii.md,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     paddingHorizontal: spacing.md,
   },
   searchIcon: { fontSize: 16, marginRight: 8 },
@@ -360,27 +353,32 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    overflow: 'hidden',
+    borderColor: colors.border,
   },
-  rowActive: { borderColor: colors.gold },
+  rowActive: {
+    borderColor: colors.gold,
+    backgroundColor: 'rgba(201,169,97,0.06)',
+  },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.borderStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  avatarTxt: { color: colors.textPrimary, fontWeight: '800', fontSize: 13 },
+  avatarActive: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+  avatarTxt: { color: colors.textSecondary, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
   name: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  meta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  amountCol: { alignItems: 'flex-end', marginRight: 8 },
-  amountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 },
-  amountVal: { fontSize: 14, fontWeight: '800', color: colors.danger, marginTop: 2 },
-  chev: { fontSize: 22, color: colors.textMuted },
+  meta: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
+  amountCol: { alignItems: 'flex-end' },
+  amountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '800', letterSpacing: 1.5 },
+  amountVal: { fontSize: 14, fontWeight: '800', color: colors.danger, marginTop: 3 },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { padding: 40, alignItems: 'center' },

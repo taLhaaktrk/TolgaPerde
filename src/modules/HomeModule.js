@@ -254,14 +254,7 @@ export default function HomeModule() {
 
 function StatCard({ label, value, accent, isPhone }) {
   return (
-    <View style={[styles.statCard, isPhone && styles.statCardPhone, shadows.sm]}>
-      <LinearGradient
-        colors={gradients.cardSubtle}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[styles.statAccent, { backgroundColor: accent }]} />
+    <View style={[styles.statCard, isPhone && styles.statCardPhone, { borderLeftColor: accent }]}>
       {isPhone ? (
         <View style={styles.statRowPhone}>
           <Text style={styles.statLabelPhone}>{label}</Text>
@@ -271,8 +264,8 @@ function StatCard({ label, value, accent, isPhone }) {
         </View>
       ) : (
         <>
-          <Text style={styles.statValue}>{value}</Text>
           <Text style={styles.statLabel}>{label}</Text>
+          <Text style={styles.statValue}>{value}</Text>
         </>
       )}
     </View>
@@ -611,19 +604,16 @@ function AttentionRow({ customer, onPress }) {
 
 function ActionCard({ title, desc, accent, onPress }) {
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.actionCard, shadows.sm]}>
-      <LinearGradient
-        colors={gradients.cardSubtle}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[styles.actionAccent, { backgroundColor: accent || colors.primary }]} />
-      <Text style={styles.actionTitle}>{title}</Text>
-      <Text style={styles.actionDesc}>{desc}</Text>
-      <View style={styles.actionBtn}>
-        <Text style={styles.actionBtnTxt}>Aç ›</Text>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      style={[styles.actionCard, { borderLeftColor: accent || colors.primary }]}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        <Text style={styles.actionDesc}>{desc}</Text>
       </View>
+      <Text style={styles.actionChev}>›</Text>
     </TouchableOpacity>
   );
 }
@@ -642,7 +632,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
+    // Sol taraflı ince accent — renk StatCard'da dinamik verilir
+    borderLeftWidth: 3,
   },
   statCardPhone: {
     flex: 0,
@@ -651,9 +643,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
   },
-  statAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  statValue: { fontSize: 28, fontWeight: '900', color: colors.textPrimary, marginTop: 4 },
-  statLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '700', letterSpacing: 1.2, marginTop: 4 },
+  statValue: { fontSize: 26, fontWeight: '900', color: colors.textPrimary },
+  statLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '800', letterSpacing: 1.5, marginBottom: 6 },
   // Telefon: tek satırda solda label, sağda büyük değer
   statRowPhone: {
     flexDirection: 'row',
@@ -711,7 +702,9 @@ const styles = StyleSheet.create({
   // Yaklaşan Taksitler satırı
   upcomingRow: {
     backgroundColor: colors.bgCard,
-    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 3,
     borderRadius: radii.md,
     padding: spacing.md,
     gap: spacing.sm,
@@ -719,15 +712,16 @@ const styles = StyleSheet.create({
   upcomingTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
+  // Sol accent border zaten durumu gösterdiği için dot'a gerek kalmadı ama halen destekli.
   upcomingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   upcomingName: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  upcomingMeta: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  upcomingMeta: { fontSize: 12, fontWeight: '600', marginTop: 3 },
   upcomingAmountWrap: { alignItems: 'flex-end', paddingTop: 28 },
   upcomingAmountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 },
   upcomingAmountVal: { fontSize: 16, fontWeight: '900', color: colors.gold },
@@ -849,7 +843,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgCard,
-    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 3,
     borderLeftColor: colors.warning,
     borderRadius: radii.md,
     // paddingTop artırıldı → × butonu (top:6, height:22 → y=6→28) içerikle çakışmasın
@@ -858,12 +854,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     // sağda × butonuna nefes → WP butonu iç içe girmesin
     paddingRight: 34,
-    gap: 12,
+    gap: 10,
   },
   attentionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.warning,
   },
   attentionMain: { flex: 1 },
@@ -899,16 +895,17 @@ const styles = StyleSheet.create({
   actionCard: {
     flex: 1,
     minWidth: 200,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.bgCard,
     borderRadius: radii.lg,
     padding: spacing.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderLeftWidth: 3,
+    borderColor: colors.border,
   },
-  actionAccent: { height: 4, width: 40, borderRadius: 2, marginBottom: 12 },
-  actionTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
-  actionDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  actionBtn: { marginTop: 12 },
-  actionBtnTxt: { color: colors.gold, fontWeight: '700', fontSize: 13 },
+  actionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
+  actionDesc: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
+  actionChev: { color: colors.textMuted, fontSize: 22, marginLeft: 12 },
 });
