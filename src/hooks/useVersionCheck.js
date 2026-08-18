@@ -37,7 +37,9 @@ async function fetchLatestVersion() {
 
 export default function useVersionCheck() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersion, setLatestVersion] = useState(null);
   const bundledRef = useRef(getBundledVersion());
+  const bundledVersion = bundledRef.current;
 
   useEffect(() => {
     // Sadece web platformunda çalış (Electron renderer da web sayılır ama zaten
@@ -50,6 +52,7 @@ export default function useVersionCheck() {
     const check = async () => {
       const latest = await fetchLatestVersion();
       if (cancelled || !latest) return;
+      setLatestVersion(latest);
       if (latest !== bundledRef.current) {
         setUpdateAvailable(true);
       }
@@ -77,17 +80,25 @@ export default function useVersionCheck() {
     };
   }, []);
 
-  const reload = () => {
+  // Cache'i temizleyip sert reload — kullanıcı manuel de tetikleyebilir
+  const forceReload = async () => {
     if (typeof window === 'undefined') return;
-    // Service worker varsa da unregister et (ileride ekleyebiliriz)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations?.().then((regs) => {
-        regs.forEach((r) => r.unregister().catch(() => {}));
-      }).catch(() => {});
-    }
-    // Hard reload
-    window.location.reload();
+    try {
+      // Service workers'ı unregister et
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) { await r.unregister(); }
+      }
+      // Cache API varsa tümünü temizle
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (_) { /* best-effort */ }
+    // Hard reload — cache-bust query ekleyerek
+    const sep = window.location.href.includes('?') ? '&' : '?';
+    window.location.href = window.location.href.split('#')[0].split('?')[0] + sep + '_r=' + Date.now();
   };
 
-  return { updateAvailable, reload };
+  return { updateAvailable, reload: forceReload, bundledVersion, latestVersion };
 }
