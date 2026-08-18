@@ -1,9 +1,13 @@
 {
   "name": "tolgaperde-desktop",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Tolga Perde - Windows masaüstü uygulaması",
   "main": "main.js",
   "author": "Tolga Perde",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/taLhaaktrk/TolgaPerde.git"
+  },
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder",
@@ -37,13 +41,16 @@
       }
     ],
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
+      "allowToChangeInstallationDirectory": false,
       "artifactName": "TolgaPerde_Setup.${ext}"
     },
     "publish": {
-      "provider": "github"
+      "provider": "github",
+      "owner": "taLhaaktrk",
+      "repo": "TolgaPerde",
+      "releaseType": "release"
     }
   }
 }
