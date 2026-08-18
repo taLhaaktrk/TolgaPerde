@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Polyline, Line } from 'react-native-svg';
 import Alert from '../../utils/alert';
 import {
@@ -83,6 +84,7 @@ export default function BottomNav() {
   const { activeModule, setActiveModule } = useAppShell();
   const { logout, user } = useAuth();
   const { canDraw } = useDeviceType();
+  const insets = useSafeAreaInsets();
   const isEmployee = user?.role === ROLE_EMPLOYEE;
 
   const items = ITEMS.filter(
@@ -101,8 +103,11 @@ export default function BottomNav() {
     );
   };
 
+  // iOS home indicator ile çakışmayı önlemek için safe-area bottom + minimum 10px
+  const bottomPad = Math.max(insets.bottom, 10);
+
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: bottomPad }]}>
       {items.map((item) => {
         const active = activeModule === item.id;
         const color = active ? colors.gold : colors.textMuted;
@@ -131,8 +136,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgCard,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingBottom: 6,
-    paddingTop: 6,
+    paddingTop: 8,
+    // paddingBottom dinamik → iOS'ta safe-area, diğer platformlarda 10px
   },
   tab: {
     flex: 1,
