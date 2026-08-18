@@ -33,13 +33,9 @@ const formatTL = (n) =>
 
 const parseAmount = parseAmountTR;
 
-// mode: 'new' (yeni müşteri — planlanan taksit sayısı) | 'archive' (eski müşteri — geçmiş taksit listesi)
-export default function NewCustomerModal({ visible, onClose, onSaved, editingCustomer = null, mode = 'new' }) {
+// Birleşik form — hem geçmiş taksitler (opsiyonel) hem gelecek plan (opsiyonel) bir arada.
+export default function NewCustomerModal({ visible, onClose, onSaved, editingCustomer = null }) {
   const isEditing = !!editingCustomer;
-  // Edit'te kayıtlı veriye göre, yoksa prop'tan: arşiv mı?
-  const isArchive = isEditing
-    ? (editingCustomer.plannedInstallments ? false : (editingCustomer.paymentHistory || []).length > 0) || mode === 'archive'
-    : mode === 'archive';
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -252,12 +248,10 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
         remainingAmount: isSplit ? (brideRemaining + groomRemaining) : remaining,
         notes: notes.trim(),
         orderDate: orderDate.toISOString(),
-        // Arşiv (eski müşteri): geçmiş taksit listesi. Yeni müşteri: boş.
-        installments: isArchive
-          ? installments.map((it) => ({ date: it.date, amount: it.amount, method: it.method }))
-          : [],
-        // Yeni müşteri: planlanan taksit sayısı (not). Arşivde 0.
-        plannedInstallments: isArchive ? 0 : (parseInt(plannedCount, 10) || 0),
+        // Ödenmiş taksitler (geçmiş) — opsiyonel, boş olabilir
+        installments: installments.map((it) => ({ date: it.date, amount: it.amount, method: it.method })),
+        // Planlanan taksit sayısı (gelecek) — kalan tutar için plan üretilir
+        plannedInstallments: parseInt(plannedCount, 10) || 0,
         // ── Split bilgisi ──
         isSplit,
         ...(isSplit ? {
@@ -267,20 +261,16 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
               totalAmount: brideTotalNum,
               deposit: brideDepositNum,
               remainingAmount: brideRemaining,
-              plannedInstallments: isArchive ? 0 : (parseInt(bridePlannedCount, 10) || 0),
-              installments: isArchive
-                ? brideInstallments.map((it) => ({ date: it.date, amount: it.amount, method: it.method }))
-                : [],
+              plannedInstallments: parseInt(bridePlannedCount, 10) || 0,
+              installments: brideInstallments.map((it) => ({ date: it.date, amount: it.amount, method: it.method })),
             },
             groom: {
               phone: groomPhone.replace(/\s/g, '').trim(),
               totalAmount: groomTotalNum,
               deposit: groomDepositNum,
               remainingAmount: groomRemaining,
-              plannedInstallments: isArchive ? 0 : (parseInt(groomPlannedCount, 10) || 0),
-              installments: isArchive
-                ? groomInstallments.map((it) => ({ date: it.date, amount: it.amount, method: it.method }))
-                : [],
+              plannedInstallments: parseInt(groomPlannedCount, 10) || 0,
+              installments: groomInstallments.map((it) => ({ date: it.date, amount: it.amount, method: it.method })),
             },
           },
         } : {}),
@@ -334,10 +324,10 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.headerEyebrow}>
-                {isEditing ? 'DÜZENLE' : (isArchive ? 'ESKİ MÜŞTERİ (ARŞİV)' : 'YENİ KAYIT')}
+                {isEditing ? 'DÜZENLE' : 'YENİ KAYIT'}
               </Text>
               <Text style={styles.headerTitle}>
-                {isEditing ? 'Müşteri Düzenle' : (isArchive ? 'Eski Müşteri Ekle' : 'Yeni Müşteri Ekle')}
+                {isEditing ? 'Müşteri Düzenle' : 'Müşteri Ekle'}
               </Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
@@ -390,22 +380,19 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
               )}
             </View>
 
-            {/* Split toggle — Kız/Erkek tarafı ayrı hesap */}
+            {/* Split toggle — kompakt satır (nadir kullanılan opsiyon) */}
             <TouchableOpacity
               onPress={() => setIsSplit((v) => !v)}
-              activeOpacity={0.7}
-              style={[styles.splitToggle, isSplit && styles.splitToggleActive]}
+              activeOpacity={0.6}
+              style={styles.splitToggle}
               disabled={busy}
             >
               <View style={[styles.splitCheckbox, isSplit && styles.splitCheckboxActive]}>
                 {isSplit && <Text style={styles.splitCheckmark}>✓</Text>}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.splitToggleTitle}>Kız / Erkek Tarafı Ayrı Hesap</Text>
-                <Text style={styles.splitToggleHint}>
-                  Ödemeler iki tarafa bölünsün, her taraf için ayrı telefon ve taksit
-                </Text>
-              </View>
+              <Text style={[styles.splitToggleTxt, isSplit && { color: colors.gold }]}>
+                Kız / Erkek tarafı ayrı hesap
+              </Text>
             </TouchableOpacity>
 
             {/* Split alanları — iki taraf */}
@@ -419,7 +406,6 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                   deposit={brideDeposit} onDepositChange={(v) => setBrideDeposit(formatAmountTR(v))}
                   plannedCount={bridePlannedCount} onPlannedChange={setBridePlannedCount}
                   installments={brideInstallments} onInstallmentsChange={setBrideInstallments}
-                  isArchive={isArchive}
                   remaining={brideRemaining}
                   installmentsTotal={brideInstallmentsTotal}
                   totalNum={brideTotalNum}
@@ -434,7 +420,6 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                   deposit={groomDeposit} onDepositChange={(v) => setGroomDeposit(formatAmountTR(v))}
                   plannedCount={groomPlannedCount} onPlannedChange={setGroomPlannedCount}
                   installments={groomInstallments} onInstallmentsChange={setGroomInstallments}
-                  isArchive={isArchive}
                   remaining={groomRemaining}
                   installmentsTotal={groomInstallmentsTotal}
                   totalNum={groomTotalNum}
@@ -495,15 +480,14 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
             </View>
 
             {!isSplit && (
-              isArchive ? (
-                // ESKİ MÜŞTERİ: geçmişte ödenen taksitlerin tam listesi
+              <>
+                {/* Ödenen taksitler — geçmişte ödenmiş taksitler (opsiyonel) */}
                 <InstallmentsField
                   installments={installments}
                   onChange={setInstallments}
                   disabled={busy}
                 />
-              ) : (
-                // YENİ MÜŞTERİ: sadece planlanan taksit sayısı (stepper ile)
+                {/* Planlanan taksit sayısı — kalan tutar için gelecek plan (opsiyonel) */}
                 <View style={{ marginBottom: spacing.md }}>
                   <Text style={styles.fieldLabel}>Planlanan Taksit Sayısı (opsiyonel)</Text>
                   <NumberStepper
@@ -529,7 +513,7 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                     );
                   })()}
                 </View>
-              )
+              </>
             )}
 
             {isSplit ? (
@@ -547,8 +531,8 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                 <View style={styles.remainingBreakdown}>
                   <Text style={styles.breakdownTxt}>Toplam {formatTL(totalNum)}</Text>
                   <Text style={styles.breakdownMinus}>− Peşinat {formatTL(depositNum)}</Text>
-                  {isArchive && (
-                    <Text style={styles.breakdownMinus}>− Taksitler {formatTL(installmentsTotal)}</Text>
+                  {installmentsTotal > 0 && (
+                    <Text style={styles.breakdownMinus}>− Ödenmiş Taksitler {formatTL(installmentsTotal)}</Text>
                   )}
                 </View>
                 <View style={styles.remainingDivider} />
@@ -640,7 +624,7 @@ function SideBlock({
   deposit, onDepositChange,
   plannedCount, onPlannedChange,
   installments, onInstallmentsChange,
-  isArchive, busy,
+  busy,
   remaining, installmentsTotal, totalNum, depositNum,
 }) {
   return (
@@ -676,24 +660,21 @@ function SideBlock({
         />
         <View style={{ flex: 1 }} />
       </View>
-      {isArchive ? (
-        <InstallmentsField
-          installments={installments}
-          onChange={onInstallmentsChange}
+      <InstallmentsField
+        installments={installments}
+        onChange={onInstallmentsChange}
+        disabled={busy}
+      />
+      <View style={{ marginBottom: spacing.md }}>
+        <Text style={styles.fieldLabel}>Planlanan Taksit Sayısı</Text>
+        <NumberStepper
+          value={plannedCount}
+          onChange={onPlannedChange}
+          min={0}
+          max={36}
           disabled={busy}
         />
-      ) : (
-        <View style={{ marginBottom: spacing.md }}>
-          <Text style={styles.fieldLabel}>Planlanan Taksit Sayısı</Text>
-          <NumberStepper
-            value={plannedCount}
-            onChange={onPlannedChange}
-            min={0}
-            max={36}
-            disabled={busy}
-          />
-        </View>
-      )}
+      </View>
       <View style={styles.sideBlockSummary}>
         <Text style={styles.sideBlockSumTxt}>
           Bu taraf kalan: <Text style={{ color: accent, fontWeight: '900' }}>
@@ -745,27 +726,20 @@ const styles = StyleSheet.create({
   body: { padding: spacing.xl, paddingBottom: spacing.xl },
   row2: { flexDirection: 'row', gap: spacing.md },
 
-  // ── Split toggle ─────────────────────────────────────────
+  // ── Split toggle (kompakt satır) ─────────────────────────
   splitToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: radii.md,
-    backgroundColor: colors.bgInput,
-    marginBottom: spacing.md,
-  },
-  splitToggleActive: {
-    borderColor: colors.gold,
-    backgroundColor: 'rgba(201,169,97,0.08)',
+    gap: 8,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+    alignSelf: 'flex-start',
   },
   splitCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
     borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
@@ -777,17 +751,12 @@ const styles = StyleSheet.create({
   splitCheckmark: {
     color: colors.primaryDeep,
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 10,
   },
-  splitToggleTitle: {
-    color: colors.textPrimary,
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  splitToggleHint: {
+  splitToggleTxt: {
     color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
+    fontWeight: '700',
+    fontSize: 12,
   },
 
   // ── Split blok (kız/erkek tarafı) ────────────────────────

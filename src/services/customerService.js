@@ -57,10 +57,12 @@ function buildDocPayload({ customer, source, mediaUrl, extras }) {
 // side = { phone, totalAmount, deposit, remainingAmount, plannedInstallments, installments[] }
 // orderDate — sipariş tarihi (installmentPlan üretimi için)
 // isArchive — arşiv müşteri mi? (installmentPlan üretmez, sadece paymentHistory'yi geçer)
-function buildSideForFirestore(sideForm, orderDate, isArchive) {
+function buildSideForFirestore(sideForm, orderDate) {
   const paymentHistory = normalizeInstallments(sideForm.installments || []);
   const plannedCount = parseInt(sideForm.plannedInstallments, 10) || 0;
-  const installmentPlan = (plannedCount > 0 && paymentHistory.length === 0 && !isArchive)
+  // Plan üret: kalan tutar üzerinden. Ödenmiş taksitler VARSA da plan üretebilir
+  // (birleşik form → hem geçmiş taksit, hem gelecek plan aynı kayıtta olabilir).
+  const installmentPlan = (plannedCount > 0)
     ? buildInstallments({
         orderDate: orderDate ? new Date(orderDate) : new Date(),
         plannedCount,
@@ -169,8 +171,8 @@ export async function saveCustomerWithPhotos({ customer, photos }) {
   let mergedPaymentHistory = null; // top-level istatistikler için birleştirilmiş liste
   let mergedInstallmentPlan = null;
   if (customer.isSplit && customer.split) {
-    const brideSide = buildSideForFirestore(customer.split.bride, customer.orderDate, false);
-    const groomSide = buildSideForFirestore(customer.split.groom, customer.orderDate, false);
+    const brideSide = buildSideForFirestore(customer.split.bride, customer.orderDate);
+    const groomSide = buildSideForFirestore(customer.split.groom, customer.orderDate);
     sidesPayload = { bride: brideSide, groom: groomSide };
     // Top-level birleştirilmiş liste (side tag'i ile) — yaklaşan taksitler için
     mergedPaymentHistory = [
@@ -187,10 +189,12 @@ export async function saveCustomerWithPhotos({ customer, photos }) {
   const { lastPaymentAt, lastPaymentMethod } = latestPaymentInfo(paymentHistory);
 
   // Split yoksa eski akış — tek installmentPlan üret
+  // Birleşik form: paymentHistory (geçmiş) + plannedCount (gelecek) birlikte
+  // olabilir. Plan üretimi paymentHistory'den bağımsız — kalan tutar üzerinden.
   const plannedCount = parseInt(customer.plannedInstallments, 10) || 0;
   const installmentPlan = mergedInstallmentPlan !== null
     ? mergedInstallmentPlan
-    : ((plannedCount > 0 && paymentHistory.length === 0)
+    : (plannedCount > 0
         ? buildInstallments({
             orderDate: customer.orderDate ? new Date(customer.orderDate) : new Date(),
             plannedCount,
@@ -266,8 +270,8 @@ export async function updateCustomerWithPhotos({ customerId, customer, photos })
   let sidesUpdate = null;
   let mergedPaymentHistoryUpd = null;
   if (customer.isSplit && customer.split) {
-    const brideSide = buildSideForFirestore(customer.split.bride, customer.orderDate, false);
-    const groomSide = buildSideForFirestore(customer.split.groom, customer.orderDate, false);
+    const brideSide = buildSideForFirestore(customer.split.bride, customer.orderDate);
+    const groomSide = buildSideForFirestore(customer.split.groom, customer.orderDate);
     sidesUpdate = { bride: brideSide, groom: groomSide };
     mergedPaymentHistoryUpd = [
       ...brideSide.paymentHistory.map((p) => ({ ...p, side: 'bride' })),

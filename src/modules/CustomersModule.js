@@ -88,14 +88,6 @@ export default function CustomersModule() {
 
       <TouchableOpacity
         activeOpacity={0.85}
-        onPress={() => setModalMode('archive')}
-      >
-        <View style={styles.archiveBtn}>
-          <Text style={styles.archiveBtnTxt}>+ Eski Müşteri</Text>
-        </View>
-      </TouchableOpacity>
-      <TouchableOpacity
-        activeOpacity={0.85}
         onPress={() => setModalMode('new')}
       >
         <LinearGradient
@@ -104,7 +96,7 @@ export default function CustomersModule() {
           end={{ x: 1, y: 1 }}
           style={styles.addBtn}
         >
-          <Text style={styles.addBtnTxt}>+ Yeni Müşteri</Text>
+          <Text style={styles.addBtnTxt}>+ Müşteri Ekle</Text>
         </LinearGradient>
       </TouchableOpacity>
     </View>
