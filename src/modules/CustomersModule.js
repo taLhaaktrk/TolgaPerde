@@ -66,7 +66,11 @@ export default function CustomersModule() {
 
   const actionButtons = (
     <View style={[styles.actionsRow, isPhone && styles.actionsRowPhone]}>
-      <Text style={styles.countBadge}>{loading ? '…' : `${filtered.length} kayıt`}</Text>
+      {/* Kayıt sayısı — sade bilgi pill */}
+      <View style={styles.countPill}>
+        <Text style={styles.countPillNum}>{loading ? '…' : filtered.length}</Text>
+        <Text style={styles.countPillTxt}>KAYIT</Text>
+      </View>
 
       {/* Aktif müşteri filtresi — toggle */}
       <TouchableOpacity
@@ -79,16 +83,18 @@ export default function CustomersModule() {
             Aktif Müşteri
           </Text>
           {activeCount > 0 && (
-            <View style={styles.activeCountBadge}>
-              <Text style={styles.activeCountTxt}>{activeCount}</Text>
+            <View style={[styles.activeCountBadge, activeOnly && styles.activeCountBadgeOn]}>
+              <Text style={[styles.activeCountTxt, !activeOnly && { color: colors.success }]}>{activeCount}</Text>
             </View>
           )}
         </View>
       </TouchableOpacity>
 
+      {/* + Müşteri Ekle — birincil aksiyon */}
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={() => setModalMode('new')}
+        style={styles.addBtnWrap}
       >
         <LinearGradient
           colors={gradients.goldButton}
@@ -96,7 +102,8 @@ export default function CustomersModule() {
           end={{ x: 1, y: 1 }}
           style={styles.addBtn}
         >
-          <Text style={styles.addBtnTxt}>+ Müşteri Ekle</Text>
+          <Text style={styles.addBtnPlus}>+</Text>
+          <Text style={styles.addBtnTxt}>Müşteri Ekle</Text>
         </LinearGradient>
       </TouchableOpacity>
     </View>
@@ -161,7 +168,6 @@ export default function CustomersModule() {
 
       <NewCustomerModal
         visible={modalMode !== null}
-        mode={modalMode || 'new'}
         onClose={() => setModalMode(null)}
         onSaved={() => { /* useCustomers stream zaten yeni kayıt için tetikleniyor */ }}
       />
@@ -224,37 +230,55 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: 0,
   },
-  countBadge: {
+  // Kayıt sayısı pill'i — sadece bilgi, en az prominent
+  countPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  countPillNum: {
     color: colors.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '900',
+    fontSize: 13,
+  },
+  countPillTxt: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+
+  // + Müşteri Ekle — birincil altın buton, gölgeli
+  addBtnWrap: {
+    shadowColor: colors.gold,
+    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 4,
   },
   addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radii.pill,
+  },
+  addBtnPlus: {
+    color: colors.primaryDeep,
+    fontWeight: '900',
+    fontSize: 16,
+    lineHeight: 18,
   },
   addBtnTxt: {
     color: colors.primaryDeep,
     fontWeight: '900',
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-  archiveBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: 'transparent',
-  },
-  archiveBtnTxt: {
-    color: colors.gold,
-    fontWeight: '800',
     fontSize: 13,
     letterSpacing: 0.3,
   },
@@ -297,9 +321,12 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     paddingHorizontal: 6,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(56,178,110,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  activeCountBadgeOn: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   activeCountTxt: {
     color: '#FFFFFF',
