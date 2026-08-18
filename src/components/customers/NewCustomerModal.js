@@ -5,6 +5,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
@@ -314,8 +315,11 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <View style={styles.backdrop}>
-        <View style={[styles.card, shadows.lg]}>
+      {/* Backdrop'a tıklama → kapan. Kart üzerine tıklama → propagate etme (kapatmasın). */}
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <View style={styles.backdrop}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={[styles.card, shadows.lg]}>
           <LinearGradient
             colors={gradients.moduleHeader}
             start={{ x: 0, y: 0 }}
@@ -597,8 +601,10 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
               </TouchableOpacity>
             </View>
           </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }

@@ -86,13 +86,14 @@ export default function PaymentModal({ visible, customer, side, onClose, onPaid 
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      {/* Backdrop'a tıklayınca klavye kapansın */}
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      {/* Backdrop'a tıklayınca modal kapansın (klavye de kapanır). Kart üzerine tıklama = kapatma. */}
+      <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); onClose?.(); }} accessible={false}>
         <View style={styles.backdrop}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.kbWrap}
         >
+        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
         <View style={[styles.card, shadows.lg]}>
           <LinearGradient
             colors={gradients.moduleHeader}
@@ -207,6 +208,7 @@ export default function PaymentModal({ visible, customer, side, onClose, onPaid 
             </View>
           </ScrollView>
         </View>
+        </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
         </View>
       </TouchableWithoutFeedback>
