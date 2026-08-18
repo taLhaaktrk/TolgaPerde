@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16, // iOS Safari 16px altı → auto-zoom bug'ı; 16+ olmalı
     color: colors.textPrimary,
     paddingVertical: 12,
   },

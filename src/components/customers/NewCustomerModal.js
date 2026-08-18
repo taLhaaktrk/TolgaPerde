@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: 16, // iOS Safari zoom bug fix — 16+ olmalı
     backgroundColor: colors.bgInput,
     color: colors.textPrimary,
   },
