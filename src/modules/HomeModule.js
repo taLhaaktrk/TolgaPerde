@@ -208,6 +208,11 @@ export default function HomeModule() {
       >
         {/* Üst başlık paneli — hafif bordo tint + altın hairline */}
         <View style={styles.heroBlock}>
+          <View style={styles.brandRow}>
+            <Text style={styles.brandTxt}>TOLGA PERDE</Text>
+            <View style={styles.brandDot} />
+            <Text style={styles.brandSub}>KASA</Text>
+          </View>
           <Text style={styles.dateHeader}>{todayHeader()}</Text>
           <Text
             style={styles.bigTotal}
@@ -642,13 +647,40 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(201, 169, 97, 0.35)',
   },
 
-  // Üst blok — defter başlık
-  dateHeader: {
+  // Marka satırı — küçük eyebrow
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  brandTxt: {
     color: colors.gold,
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+  },
+  brandDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.gold,
+    opacity: 0.6,
+  },
+  brandSub: {
+    color: colors.textMuted,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 2,
-    marginBottom: 10,
+  },
+
+  // Üst blok — defter tarih
+  dateHeader: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 8,
   },
   bigTotal: {
     color: colors.textPrimary,

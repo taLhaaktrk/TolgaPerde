@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import useDeviceType from '../hooks/useDeviceType';
 import LOGO from '../theme/brand';
-import { colors, gradients, radii, spacing, shadows } from '../theme/colors';
+import { colors, gradients, spacing } from '../theme/colors';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -36,14 +36,8 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.flex}>
-      {/* Arka plan — derin navy ortada hafif bordo aydınlanma */}
-      <LinearGradient
-        colors={['#08111E', '#11253C', '#1a0b14', '#11253C', '#08111E']}
-        locations={[0, 0.3, 0.5, 0.7, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+      {/* Arka plan — düz koyu navy */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]} />
 
       <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
@@ -55,58 +49,72 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-          {/* MARKA — büyük logo + isim altında */}
-          <View style={[styles.brand, isPhone && styles.brandPhone]}>
-            <Image
-              source={LOGO}
-              style={[styles.logo, isPhone && styles.logoPhone]}
-              resizeMode="contain"
-            />
-            <Text style={[styles.brandName, isPhone && styles.brandNamePhone]}>TOLGA PERDE</Text>
-            <View style={styles.brandUnderline} />
-            <Text style={styles.brandTagline}>Dijital Ölçü & Müşteri Defteri</Text>
-          </View>
-
-          {/* PANEL — neon çerçeve + form */}
-          <View style={styles.panelWrap}>
-            <View style={styles.neonOuter} pointerEvents="none" />
-            <View style={styles.neonMid} pointerEvents="none" />
-            <View style={styles.neonGold} pointerEvents="none" />
-
-            <View style={[styles.card, isPhone && styles.cardPhone, shadows.lg]}>
-              <Text style={styles.welcome}>HOŞ GELDİNİZ</Text>
-              <Text style={styles.subtitle}>Devam etmek için giriş yapın</Text>
-
-              <Text style={styles.label}>Kullanıcı Adı</Text>
-              <TextInput
-                style={styles.input}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="kullanıcı adı"
-                placeholderTextColor={colors.textFaint}
-                autoCapitalize="none"
-                autoCorrect={false}
-                onSubmitEditing={handleLogin}
+            {/* Marka — logo + isim + altın çizgi + slogan */}
+            <View style={[styles.brand, isPhone && styles.brandPhone]}>
+              <Image
+                source={LOGO}
+                style={[styles.logo, isPhone && styles.logoPhone]}
+                resizeMode="contain"
               />
+              <Text style={[styles.brandName, isPhone && styles.brandNamePhone]}>
+                TOLGA PERDE
+              </Text>
+              <View style={styles.brandUnderline} />
+              <Text style={styles.brandTagline}>Dijital Ölçü & Müşteri Defteri</Text>
+            </View>
 
-              <Text style={[styles.label, { marginTop: spacing.md }]}>Şifre</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••"
-                placeholderTextColor={colors.textFaint}
-                secureTextEntry
-                onSubmitEditing={handleLogin}
-              />
+            {/* Panel — defter kartı (bordo tint + altın border) */}
+            <View style={[styles.card, isPhone && styles.cardPhone]}>
+              {/* Bölüm başlığı — altın accent bar */}
+              <View style={styles.sectionHead}>
+                <View style={styles.sectionBar} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionTitle}>HOŞ GELDİNİZ</Text>
+                  <Text style={styles.sectionSubtitle}>devam etmek için giriş yapın</Text>
+                </View>
+              </View>
+
+              {/* Kullanıcı adı */}
+              <Text style={styles.label}>KULLANICI ADI</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  value={username}
+                  onChangeText={setUsername}
+                  placeholder="kullanıcı adı"
+                  placeholderTextColor={colors.textFaint}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onSubmitEditing={handleLogin}
+                />
+              </View>
+
+              {/* Şifre */}
+              <Text style={[styles.label, { marginTop: 18 }]}>ŞİFRE</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••"
+                  placeholderTextColor={colors.textFaint}
+                  secureTextEntry
+                  onSubmitEditing={handleLogin}
+                />
+              </View>
 
               {!!error && (
                 <View style={styles.errorBox}>
+                  <View style={styles.errorBar} />
                   <Text style={styles.errorTxt}>{error}</Text>
                 </View>
               )}
 
-              <TouchableOpacity activeOpacity={0.85} onPress={handleLogin} style={{ marginTop: spacing.lg }}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleLogin}
+                style={{ marginTop: 24 }}
+              >
                 <LinearGradient
                   colors={gradients.goldButton}
                   start={{ x: 0, y: 0 }}
@@ -117,9 +125,8 @@ export default function LoginScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
 
-          <Text style={styles.footerHint}>Giriş bilgilerinizi yöneticinizden alabilirsiniz.</Text>
+            <Text style={styles.footerHint}>Giriş bilgilerinizi yöneticinizden alabilirsiniz.</Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -133,175 +140,172 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   center: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
 
-  // MARKA BÖLÜMÜ — panel üstünde, dikkat çeker
+  // MARKA
   brand: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: 24,
   },
   brandPhone: {
-    marginBottom: spacing.md,
+    marginBottom: 18,
   },
   logo: {
-    width: 130,
-    height: 130,
-    // Logo'nun etrafına subtle altın glow
+    width: 110,
+    height: 110,
     ...(Platform.OS === 'web'
-      ? { filter: 'drop-shadow(0 0 24px rgba(201, 169, 97, 0.45)) drop-shadow(0 0 8px rgba(195, 49, 65, 0.6))' }
+      ? { filter: 'drop-shadow(0 0 20px rgba(201, 169, 97, 0.35))' }
       : {
           shadowColor: '#C9A961',
-          shadowOpacity: 0.6,
+          shadowOpacity: 0.5,
           shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 20,
+          shadowRadius: 16,
         }),
   },
   logoPhone: {
-    width: 92,
-    height: 92,
+    width: 82,
+    height: 82,
   },
   brandName: {
-    color: colors.textPrimary,
-    fontSize: 26,
+    color: colors.gold,
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: 6,
-    marginTop: spacing.md,
-    ...(Platform.OS === 'web'
-      ? { textShadow: '0 0 20px rgba(201, 169, 97, 0.4)' }
-      : {}),
+    letterSpacing: 5,
+    marginTop: 14,
+  },
+  brandNamePhone: {
+    fontSize: 18,
+    letterSpacing: 4,
+    marginTop: 10,
   },
   brandUnderline: {
-    width: 60,
+    width: 40,
     height: 2,
     backgroundColor: colors.gold,
     marginTop: 8,
     borderRadius: 1,
-    opacity: 0.8,
+    opacity: 0.7,
   },
   brandTagline: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 2,
-    marginTop: 10,
+    letterSpacing: 1.8,
+    marginTop: 8,
     textTransform: 'uppercase',
   },
 
-  // PANEL
-  panelWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Dış kalın bordo + gerçek neon glow
-  neonOuter: {
-    position: 'absolute',
-    top: -6, bottom: -6, left: -6, right: -6,
-    borderRadius: 26,
-    borderWidth: 6,
-    borderColor: 'rgba(195, 49, 65, 0.55)',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0 0 80px 14px rgba(195, 49, 65, 0.55), 0 0 30px 4px rgba(201, 169, 97, 0.35), inset 0 0 20px rgba(195, 49, 65, 0.15)' }
-      : {
-          shadowColor: '#C33141',
-          shadowOpacity: 1,
-          shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 40,
-        }),
-  },
-  // Orta keskin bordo çizgi
-  neonMid: {
-    position: 'absolute',
-    top: -2, bottom: -2, left: -2, right: -2,
-    borderRadius: 23,
-    borderWidth: 1.5,
-    borderColor: 'rgba(195, 49, 65, 0.95)',
-  },
-  // İç altın hairline
-  neonGold: {
-    position: 'absolute',
-    top: 0, bottom: 0, left: 0, right: 0,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 169, 97, 0.75)',
-  },
-
-  brandNamePhone: {
-    fontSize: 20,
-    letterSpacing: 4,
-    marginTop: spacing.sm,
-  },
+  // Panel — defter kartı
   card: {
     width: CARD_W,
     maxWidth: '100%',
-    backgroundColor: colors.bgCard,
-    borderRadius: 22,
-    padding: spacing.xl,
-    overflow: 'hidden',
+    borderRadius: 14,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 169, 97, 0.35)',
+    backgroundColor: 'rgba(92, 13, 20, 0.18)',
   },
   cardPhone: {
-    width: '100%',
-    padding: spacing.lg,
+    padding: 18,
   },
 
-  welcome: {
+  // Bölüm başlığı — altın accent bar
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.20)',
+  },
+  sectionBar: {
+    width: 3,
+    height: 22,
+    backgroundColor: colors.gold,
+    borderRadius: 2,
+  },
+  sectionTitle: {
+    fontSize: 13,
     color: colors.gold,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 4,
+    fontWeight: '900',
+    letterSpacing: 2.5,
   },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-
-  label: {
+  sectionSubtitle: {
     fontSize: 11,
     color: colors.textMuted,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontWeight: '600',
+    marginTop: 3,
+    textTransform: 'lowercase',
+    letterSpacing: 0.3,
+  },
+
+  // Label — altın uppercase eyebrow
+  label: {
+    fontSize: 10,
+    color: colors.gold,
+    fontWeight: '900',
+    letterSpacing: 1.8,
     marginBottom: 6,
   },
+  inputRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.35)',
+  },
   input: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 16,
-    backgroundColor: colors.bgInput,
+    fontSize: 16, // iOS auto-zoom fix
+    paddingVertical: 12,
+    paddingHorizontal: 2,
     color: colors.textPrimary,
+    backgroundColor: 'transparent',
   },
 
   errorBox: {
-    marginTop: spacing.md,
-    backgroundColor: colors.dangerSoft,
-    borderColor: 'rgba(226,92,92,0.4)',
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(226,92,92,0.10)',
+    borderColor: 'rgba(226,92,92,0.35)',
     borderWidth: 1,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  errorTxt: { color: colors.danger, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  errorBar: {
+    width: 3,
+    alignSelf: 'stretch',
+    backgroundColor: colors.danger,
+    borderRadius: 2,
+  },
+  errorTxt: { flex: 1, color: colors.danger, fontSize: 13, fontWeight: '700' },
 
   loginBtn: {
-    paddingVertical: 16,
-    borderRadius: radii.md,
+    paddingVertical: 15,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: colors.gold,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 4,
   },
-  loginBtnTxt: { color: colors.primaryDeep, fontWeight: '900', fontSize: 15, letterSpacing: 1 },
+  loginBtnTxt: {
+    color: colors.primaryDeep,
+    fontWeight: '900',
+    fontSize: 15,
+    letterSpacing: 1.5,
+  },
 
   footerHint: {
     color: colors.textFaint,
     fontSize: 11,
     textAlign: 'center',
-    marginTop: spacing.xl,
+    marginTop: 24,
+    letterSpacing: 0.3,
   },
 });
