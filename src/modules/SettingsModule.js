@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import ModuleHeader from '../components/shell/ModuleHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import useVersionCheck from '../hooks/useVersionCheck';
 import { useAuth } from '../context/AuthContext';
-import { colors, radii, spacing } from '../theme/colors';
+import { colors } from '../theme/colors';
 
 export default function SettingsModule() {
   const { user } = useAuth();
   const versionInfo = useVersionCheck();
+  const insets = useSafeAreaInsets();
   const updateAvailable =
     versionInfo.latestVersion &&
     versionInfo.bundledVersion &&
@@ -15,48 +16,39 @@ export default function SettingsModule() {
 
   return (
     <View style={styles.flex}>
-      <ModuleHeader eyebrow="AYARLAR" title="Ayarlar" />
-      <ScrollView contentContainerStyle={styles.content}>
-
-        {/* Kullanıcı bilgisi */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>OTURUM</Text>
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Kullanıcı</Text>
-              <Text style={styles.rowValue}>{user?.displayName || user?.username || '—'}</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Rol</Text>
-              <Text style={styles.rowValue}>
-                {user?.role === 'admin' ? 'Yönetici' : user?.role === 'employee' ? 'Çalışan' : 'Kullanıcı'}
-              </Text>
-            </View>
-          </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Üst başlık paneli */}
+        <View style={[styles.heroBlock, { paddingTop: (insets.top || 12) + 14 }]}>
+          <Text style={styles.pageTitle}>Ayarlar</Text>
+          <Text style={styles.pageSub}>Hesap · sürüm · platform</Text>
         </View>
 
-        {/* Sürüm & güncelleme */}
-        {versionInfo.bundledVersion && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>UYGULAMA SÜRÜMÜ</Text>
-            <View style={styles.card}>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>Şu anki sürüm</Text>
-                <Text style={styles.rowValue}>{versionInfo.bundledVersion}</Text>
-              </View>
+        <View style={styles.content}>
+          {/* Oturum */}
+          <SectionHeader title="OTURUM" />
+          <InfoRow label="Kullanıcı" value={user?.displayName || user?.username || '—'} />
+          <InfoRow
+            label="Rol"
+            value={
+              user?.role === 'admin' ? 'Yönetici'
+              : user?.role === 'employee' ? 'Çalışan'
+              : 'Kullanıcı'
+            }
+          />
+
+          {/* Sürüm */}
+          {versionInfo.bundledVersion && (
+            <>
+              <View style={styles.sectionSpacer} />
+              <SectionHeader title="UYGULAMA SÜRÜMÜ" />
+              <InfoRow label="Şu anki sürüm" value={versionInfo.bundledVersion} />
               {versionInfo.latestVersion && (
-                <>
-                  <View style={styles.divider} />
-                  <View style={styles.row}>
-                    <Text style={styles.rowLabel}>Sunucudaki son sürüm</Text>
-                    <Text style={[styles.rowValue, updateAvailable && { color: colors.gold }]}>
-                      {versionInfo.latestVersion}
-                    </Text>
-                  </View>
-                </>
+                <InfoRow
+                  label="Sunucudaki son sürüm"
+                  value={versionInfo.latestVersion}
+                  valueColor={updateAvailable ? colors.gold : undefined}
+                />
               )}
-              <View style={styles.divider} />
               <TouchableOpacity
                 onPress={versionInfo.reload}
                 activeOpacity={0.7}
@@ -71,74 +63,131 @@ export default function SettingsModule() {
                   ? 'Yeni bir sürüm yayınlanmış. Güncelle butonuna tıklayarak hemen alabilirsin.'
                   : 'Uygulaman güncel. Yine de yenilemek istersen bu butona tıkla — tarayıcı cache\'i temizlenip sıfırdan yüklenir.'}
               </Text>
-            </View>
-          </View>
-        )}
+            </>
+          )}
 
-        {/* Platform bilgisi */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>PLATFORM</Text>
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Çalışma ortamı</Text>
-              <Text style={styles.rowValue}>
-                {Platform.OS === 'web' ? 'Web / PWA' : Platform.OS === 'ios' ? 'iOS' : 'Android'}
-              </Text>
-            </View>
-          </View>
+          {/* Platform */}
+          <View style={styles.sectionSpacer} />
+          <SectionHeader title="PLATFORM" />
+          <InfoRow
+            label="Çalışma ortamı"
+            value={
+              Platform.OS === 'web' ? 'Web / PWA'
+              : Platform.OS === 'ios' ? 'iOS'
+              : 'Android'
+            }
+          />
         </View>
-
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+function InfoRow({ label, value, valueColor }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={[styles.infoValue, valueColor && { color: valueColor }]}>{value}</Text>
+    </View>
+  );
+}
 
-  section: { marginBottom: spacing.xl },
-  sectionLabel: {
+function SectionHeader({ title, subtitle }) {
+  return (
+    <View style={styles.sectionHead}>
+      <View style={styles.sectionBar} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.bg },
+  scrollContent: { paddingBottom: 40 },
+
+  heroBlock: {
+    paddingHorizontal: 22,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(92, 13, 20, 0.22)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.35)',
+  },
+  pageTitle: {
+    color: colors.gold,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  pageSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+
+  content: { paddingHorizontal: 22, paddingTop: 20 },
+
+  sectionSpacer: { height: 32 },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.15)',
+  },
+  sectionBar: {
+    width: 3,
+    height: 18,
+    backgroundColor: colors.gold,
+    borderRadius: 2,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    color: colors.gold,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+  },
+  sectionSubtitle: {
     fontSize: 10,
     color: colors.textMuted,
-    fontWeight: '800',
-    letterSpacing: 2,
-    marginBottom: spacing.sm,
+    fontWeight: '600',
+    marginTop: 2,
+    textTransform: 'lowercase',
   },
-  card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  row: {
+
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  rowLabel: {
+  infoLabel: {
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
-  rowValue: {
+  infoValue: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.lg,
-  },
+
   reloadBtn: {
-    paddingVertical: 16,
-    paddingHorizontal: spacing.lg,
+    marginTop: 14,
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: 'center',
-    backgroundColor: 'rgba(201,169,97,0.08)',
+    backgroundColor: 'rgba(201,169,97,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,169,97,0.45)',
   },
   reloadTxt: {
     color: colors.gold,
@@ -149,8 +198,7 @@ const styles = StyleSheet.create({
   hint: {
     color: colors.textMuted,
     fontSize: 11,
-    padding: spacing.lg,
-    paddingTop: 0,
+    marginTop: 8,
     lineHeight: 16,
   },
 });

@@ -1,13 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
-import ModuleHeader from '../components/shell/ModuleHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../components/ui/Dropdown';
 import useCustomers from '../hooks/useCustomers';
 import useDeviceType from '../hooks/useDeviceType';
 import { computeReports, formatTLCompact, MONTH_LABELS_TR } from '../utils/reports';
-import { colors, gradients, spacing, radii, shadows } from '../theme/colors';
+import { colors } from '../theme/colors';
 
 const MONTH_NAMES_TR = [
   'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
@@ -17,17 +16,16 @@ const MONTH_NAMES_TR = [
 export default function ReportsModule() {
   const { customers, loading } = useCustomers(500);
   const { isPhone } = useDeviceType();
+  const insets = useSafeAreaInsets();
 
   const report = useMemo(() => computeReports(customers), [customers]);
 
   const monthName = MONTH_NAMES_TR[new Date().getMonth()];
   const collectionPct = Math.round(report.collectionRatio * 100);
 
-  // Yıl + ay seçicileri — varsayılan bugünün yıl/ayı
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
-  // Veride bulunan tüm yıllar — dropdown opsiyonları (en yeni üstte)
   const availableYears = useMemo(() => {
     const set = new Set([new Date().getFullYear()]);
     for (const c of customers) {
@@ -50,7 +48,6 @@ export default function ReportsModule() {
     []
   );
 
-  // Seçili yıla göre aylık satış toplamları (12 ay)
   const yearMonthlySales = useMemo(() => {
     const sums = new Array(12).fill(0);
     for (const c of customers) {
@@ -64,7 +61,6 @@ export default function ReportsModule() {
     return sums;
   }, [customers, selectedYear]);
 
-  // Bar chart verisi — seçili ay bordo vurgulu, diğerleri altın
   const barData = useMemo(
     () =>
       yearMonthlySales.map((value, i) => ({
@@ -75,13 +71,11 @@ export default function ReportsModule() {
     [yearMonthlySales, selectedMonth]
   );
 
-  // Seçili yılda hiç satış var mı? — bar chart empty state için
   const hasYearData = useMemo(
     () => yearMonthlySales.some((v) => v > 0),
     [yearMonthlySales]
   );
 
-  // Bar chart Y-axis max + label dizisi (precomputed — function prop'undan daha güvenilir)
   const maxBarValue = useMemo(() => {
     const max = Math.max(...yearMonthlySales, 0);
     if (max <= 0) return 1000;
@@ -93,8 +87,6 @@ export default function ReportsModule() {
     return [0, step, step * 2, step * 3, step * 4].map(formatTLCompact);
   }, [maxBarValue]);
 
-  // Pie chart verisi — tahsil edilen vs bekleyen
-  // showGradient YOK: web'de SVG radialGradient bug'ı patlamaması için solid renkler.
   const pieData = useMemo(() => {
     const total = (report.collectedAmount || 0) + (report.pendingReceivable || 0);
     if (total <= 0) return null;
@@ -106,76 +98,55 @@ export default function ReportsModule() {
 
   return (
     <View style={styles.flex}>
-      <ModuleHeader
-        eyebrow="DÜKKAN ANALİZİ"
-        title="Raporlar"
-      />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.cardsGrid, isPhone && styles.cardsGridPhone]}>
-          <SummaryCard
-            label="TOPLAM CİRO"
-            value={loading ? '…' : formatTLCompact(report.totalRevenue)}
-            sub="Tüm zamanlar"
-            accent={colors.gold}
-            accentSoft={colors.goldSoft}
-            isPhone={isPhone}
-          />
-          <SummaryCard
-            label="BU AY"
-            value={loading ? '…' : formatTLCompact(report.monthRevenue)}
-            sub={monthName}
-            accent={colors.primary}
-            accentSoft={colors.primarySoft}
-            isPhone={isPhone}
-          />
-          <SummaryCard
-            label="BEKLEYEN ALACAK"
-            value={loading ? '…' : formatTLCompact(report.pendingReceivable)}
-            sub="Tahsil edilmemiş"
-            accent={colors.danger}
-            accentSoft={colors.dangerSoft}
-            isPhone={isPhone}
-          />
-          <SummaryCard
-            label="TAHSİL EDİLEN"
-            value={loading ? '…' : formatTLCompact(report.collectedAmount)}
-            sub={`%${collectionPct} tahsilat`}
-            accent={colors.success}
-            accentSoft={colors.successSoft}
-            isPhone={isPhone}
-          />
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Üst başlık paneli — Müşteriler ile tutarlı */}
+        <View style={[styles.heroBlock, { paddingTop: (insets.top || 12) + 14 }]}>
+          <Text style={styles.pageTitle}>Raporlar</Text>
+          <Text style={styles.pageSub}>Dükkan analizi · {monthName}</Text>
         </View>
 
-        {/* 📊 Aylık Ciro — Bar Chart */}
-        <View style={[styles.chartCard, shadows.md]}>
-          <LinearGradient
-            colors={gradients.cardSubtle}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
+        <View style={styles.content}>
+          {/* Özet — defter satırları */}
+          <SectionHeader title="ÖZET" />
+          <SummaryRow
+            label="TOPLAM CİRO"
+            sub="Tüm zamanlar"
+            value={loading ? '…' : formatTLCompact(report.totalRevenue)}
+            accent={colors.gold}
           />
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartEyebrow}>AYLIK CİRO</Text>
-            <Text style={styles.chartTitle}>{selectedYear} Yılı Satışları</Text>
-          </View>
+          <SummaryRow
+            label="BU AY"
+            sub={monthName}
+            value={loading ? '…' : formatTLCompact(report.monthRevenue)}
+            accent={colors.primary}
+          />
+          <SummaryRow
+            label="BEKLEYEN ALACAK"
+            sub="Tahsil edilmemiş"
+            value={loading ? '…' : formatTLCompact(report.pendingReceivable)}
+            accent={colors.danger}
+            valueColor={colors.danger}
+          />
+          <SummaryRow
+            label="TAHSİL EDİLEN"
+            sub={`%${collectionPct} tahsilat`}
+            value={loading ? '…' : formatTLCompact(report.collectedAmount)}
+            accent={colors.success}
+            valueColor={colors.success}
+          />
 
-          {/* Yıl + Ay seçicileri */}
-          <View style={[styles.filterRow, isPhone && styles.filterRowPhone]}>
+          {/* Aylık Ciro */}
+          <View style={styles.sectionSpacer} />
+          <SectionHeader title="AYLIK CİRO" subtitle={`${selectedYear} yılı satışları`} />
+
+          <View style={styles.filterRow}>
             <View style={styles.filterCol}>
               <Text style={styles.filterLabel}>YIL</Text>
-              <Dropdown
-                value={selectedYear}
-                onChange={setSelectedYear}
-                options={yearOptions}
-              />
+              <Dropdown value={selectedYear} onChange={setSelectedYear} options={yearOptions} />
             </View>
             <View style={styles.filterCol}>
               <Text style={styles.filterLabel}>VURGULU AY</Text>
-              <Dropdown
-                value={selectedMonth}
-                onChange={setSelectedMonth}
-                options={monthOptions}
-              />
+              <Dropdown value={selectedMonth} onChange={setSelectedMonth} options={monthOptions} />
             </View>
           </View>
 
@@ -215,29 +186,15 @@ export default function ReportsModule() {
               </View>
             </>
           ) : (
-            <View style={styles.chartEmpty}>
-              <Text style={styles.chartEmptyTitle}>
-                {selectedYear} yılında satış yok
-              </Text>
-              <Text style={styles.chartEmptySub}>
-                Farklı bir yıl seç ya da bu yıl için müşteri eklemeye başla.
-              </Text>
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>{selectedYear} yılında satış yok</Text>
+              <Text style={styles.emptySub}>Farklı bir yıl seç ya da bu yıl için müşteri eklemeye başla.</Text>
             </View>
           )}
-        </View>
 
-        {/* 🥧 Tahsilat Durumu — Pie Chart */}
-        <View style={[styles.chartCard, shadows.md, { marginTop: spacing.xl }]}>
-          <LinearGradient
-            colors={gradients.cardSubtle}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartEyebrow}>TAHSİLAT DURUMU</Text>
-            <Text style={styles.chartTitle}>Para Dağılımı</Text>
-          </View>
+          {/* Tahsilat durumu */}
+          <View style={styles.sectionSpacer} />
+          <SectionHeader title="TAHSİLAT DURUMU" subtitle="para dağılımı" />
 
           {pieData ? (
             <View style={[styles.pieWrap, isPhone && styles.pieWrapPhone]}>
@@ -248,7 +205,7 @@ export default function ReportsModule() {
                   donut
                   radius={isPhone ? 80 : 100}
                   innerRadius={isPhone ? 50 : 65}
-                  innerCircleColor={colors.bgCard}
+                  innerCircleColor={colors.bg}
                   centerLabelComponent={() => (
                     <View style={styles.pieCenter}>
                       <Text style={styles.pieCenterPct}>%{collectionPct}</Text>
@@ -274,15 +231,47 @@ export default function ReportsModule() {
               </View>
             </View>
           ) : (
-            <View style={styles.pieEmpty}>
-              <Text style={styles.pieEmptyTitle}>Henüz satış kaydı yok</Text>
-              <Text style={styles.pieEmptySub}>
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>Henüz satış kaydı yok</Text>
+              <Text style={styles.emptySub}>
                 Müşteri eklemeye başlayınca tahsilat oranı burada görünecek.
               </Text>
             </View>
           )}
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+function SummaryRow({ label, sub, value, accent, valueColor }) {
+  return (
+    <View style={styles.summaryRow}>
+      <View style={[styles.summaryAccent, { backgroundColor: accent }]} />
+      <View style={{ flex: 1, paddingRight: 8 }}>
+        <Text style={[styles.summaryLabel, { color: accent }]}>{label}</Text>
+        {!!sub && <Text style={styles.summarySub}>{sub}</Text>}
+      </View>
+      <Text
+        style={[styles.summaryValue, valueColor && { color: valueColor }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SectionHeader({ title, subtitle }) {
+  return (
+    <View style={styles.sectionHead}>
+      <View style={styles.sectionBar} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
     </View>
   );
 }
@@ -309,172 +298,107 @@ function PieLegendRow({ color, label, value, pct }) {
   );
 }
 
-function SummaryCard({ label, value, sub, accent, accentSoft, isPhone }) {
-  return (
-    <View style={[styles.card, isPhone && styles.cardPhone, shadows.md]}>
-      <LinearGradient
-        colors={gradients.cardSubtle}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[styles.accentBar, { backgroundColor: accent }]} />
-      <View style={[styles.iconDot, { backgroundColor: accentSoft, borderColor: accent }]}>
-        <View style={[styles.iconDotInner, { backgroundColor: accent }]} />
-      </View>
-      <Text style={[styles.cardLabel, isPhone && styles.cardLabelPhone, { color: accent }]}>
-        {label}
-      </Text>
-      <Text
-        style={[styles.cardValue, isPhone && styles.cardValuePhone]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.5}
-      >
-        {value}
-      </Text>
-      <Text style={[styles.cardSub, isPhone && styles.cardSubPhone]}>{sub}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  flex: { flex: 1, backgroundColor: colors.bg },
+  scrollContent: { paddingBottom: 40 },
 
-  // Geniş ekran: 4 kart yatay
-  cardsGrid: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
+  // Üst başlık paneli
+  heroBlock: {
+    paddingHorizontal: 22,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(92, 13, 20, 0.22)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.35)',
   },
-  // Telefon: 2x2 grid, flex-wrap
-  cardsGridPhone: {
-    flexWrap: 'wrap',
-    rowGap: spacing.md,
-  },
-
-  card: {
-    flex: 1,
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    minHeight: 140,
-  },
-  // Telefonda 2 kart yan yana — flexBasis ~%48 (gap için pay bırakır)
-  cardPhone: {
-    flex: 0,
-    minWidth: '47%',
-    maxWidth: '49%',
-    minHeight: 110,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-
-  // Sol kenar accent çubuğu
-  accentBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-  },
-
-  // Sağ üst köşe ikon noktası (renkli daire)
-  iconDot: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconDotInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  cardLabel: {
-    fontSize: 10,
+  pageTitle: {
+    color: colors.gold,
+    fontSize: 28,
     fontWeight: '900',
-    letterSpacing: 1.4,
+    letterSpacing: -0.5,
   },
-  cardLabelPhone: {
-    fontSize: 9,
-    letterSpacing: 1,
-  },
-  cardValue: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    marginTop: spacing.sm,
-    letterSpacing: 0.3,
-  },
-  cardValuePhone: {
-    fontSize: 18,
-    marginTop: 4,
-  },
-  cardSub: {
-    fontSize: 11,
+  pageSub: {
     color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
-  },
-  cardSubPhone: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-
-  // Grafik kart konteyneri (bar + pie ortak)
-  chartCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    padding: spacing.lg,
-    overflow: 'hidden',
-  },
-  chartHeader: { marginBottom: spacing.md },
-  chartEyebrow: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: colors.gold,
-    letterSpacing: 1.6,
-  },
-  chartTitle: {
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontWeight: '800',
-    marginTop: 4,
     letterSpacing: 0.3,
   },
-  chartBody: {
-    paddingTop: spacing.sm,
-    paddingRight: spacing.sm,
+
+  content: { paddingHorizontal: 22, paddingTop: 20 },
+
+  // Bölüm başlığı
+  sectionSpacer: { height: 32 },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.15)',
+  },
+  sectionBar: {
+    width: 3,
+    height: 18,
+    backgroundColor: colors.gold,
+    borderRadius: 2,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    color: colors.gold,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+  },
+  sectionSubtitle: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginTop: 2,
+    textTransform: 'lowercase',
   },
 
-  // Yıl + Ay filtre satırı
+  // Özet satırı
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  summaryAccent: {
+    width: 3,
+    height: 32,
+    borderRadius: 2,
+  },
+  summaryLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.6,
+  },
+  summarySub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 3,
+  },
+  summaryValue: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+    marginLeft: 8,
+  },
+
+  // Filtre satırı
   filterRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  filterRowPhone: {
-    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 14,
   },
   filterCol: {
     flex: 1,
-    minWidth: 130,
+    minWidth: 120,
   },
   filterLabel: {
     fontSize: 10,
@@ -484,11 +408,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Bar chart altı legend
+  chartBody: { paddingTop: 6, paddingRight: 6 },
+
+  // Legend
   legendRow: {
     flexDirection: 'row',
-    gap: spacing.lg,
-    marginTop: spacing.md,
+    gap: 16,
+    marginTop: 12,
     justifyContent: 'center',
     flexWrap: 'wrap',
   },
@@ -504,15 +430,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Pie chart bloğu — geniş ekran: yan yana, telefon: alt alta
+  // Pie chart wrap
   pieWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xl,
+    gap: 20,
+    marginTop: 6,
   },
   pieWrapPhone: {
     flexDirection: 'column',
-    gap: spacing.lg,
+    gap: 14,
   },
   pieChartBox: {
     alignItems: 'center',
@@ -533,31 +460,29 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Pie legend (sağ taraf / alt)
   pieLegend: {
     flex: 1,
-    gap: spacing.md,
+    gap: 8,
     minWidth: 200,
   },
   pieLegendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.sm,
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   pieLegendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   pieLegendLabel: {
     fontSize: 11,
     color: colors.textMuted,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   pieLegendValue: {
     fontSize: 14,
@@ -571,37 +496,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Empty state — bar chart + pie chart ortak
-  pieEmpty: {
+  // Boş
+  emptyBox: {
+    paddingVertical: 20,
     alignItems: 'center',
-    paddingVertical: spacing.xl,
   },
-  pieEmptyTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  pieEmptySub: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  chartEmpty: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  chartEmptyTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  chartEmptySub: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
+  emptyTitle: { color: colors.textSecondary, fontSize: 14, fontWeight: '700' },
+  emptySub: { color: colors.textMuted, fontSize: 12, marginTop: 4, textAlign: 'center', lineHeight: 18 },
 });

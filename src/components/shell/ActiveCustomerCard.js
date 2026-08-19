@@ -199,14 +199,7 @@ export default function ActiveCustomerCard({ customer, onClear, onPayment, onEdi
     );
 
   return (
-    <View style={[styles.card, shadows.md]}>
-      <LinearGradient
-        colors={gradients.customerCard}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
+    <View style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.headerLabel}>
           {isActive ? 'AKTİF MÜŞTERİ' : 'MÜŞTERİ'}
@@ -611,11 +604,14 @@ function SidePaymentBlock({ side, label, accent, customerName, orderDate, onWhat
 
 const splitStyles = StyleSheet.create({
   block: {
-    borderLeftWidth: 4,
-    borderRadius: radii.md,
+    borderLeftWidth: 3,
+    borderRadius: 10,
     padding: spacing.md,
     marginTop: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderLeftColor: colors.gold,
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   label: { fontSize: 11, fontWeight: '900', letterSpacing: 2 },
@@ -657,14 +653,15 @@ const splitStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radii.lg,
+    borderRadius: 14,
     padding: spacing.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: 'rgba(201, 169, 97, 0.30)',
+    backgroundColor: 'rgba(92, 13, 20, 0.16)',
   },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '800', letterSpacing: 1.5 },
+  headerLabel: { fontSize: 11, color: colors.gold, fontWeight: '900', letterSpacing: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerBtn: {
     paddingHorizontal: 10,
@@ -749,14 +746,14 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(201, 169, 97, 0.20)',
     marginVertical: spacing.lg,
   },
   sectionLabel: {
-    fontSize: 10,
-    color: colors.textMuted,
-    fontWeight: '800',
-    letterSpacing: 1.5,
+    fontSize: 11,
+    color: colors.gold,
+    fontWeight: '900',
+    letterSpacing: 2,
     marginBottom: spacing.sm,
   },
   amountBlock: { alignItems: 'flex-start' },
@@ -791,22 +788,23 @@ const styles = StyleSheet.create({
   installmentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    borderRadius: radii.sm,
-    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
     gap: 10,
   },
   installmentBullet: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.gold,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(201,169,97,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,169,97,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  installmentBulletTxt: { color: colors.primaryDeep, fontWeight: '900', fontSize: 11 },
+  installmentBulletTxt: { color: colors.gold, fontWeight: '900', fontSize: 10 },
   installmentDate: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
   installmentMethod: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
   installmentAmount: { color: colors.success, fontWeight: '800', fontSize: 14 },
@@ -816,16 +814,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: 'rgba(226,92,92,0.4)',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(201, 169, 97, 0.28)',
   },
-  remainingLabel: { fontSize: 10, color: colors.danger, fontWeight: '800', letterSpacing: 1.5 },
-  remainingHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  remainingValue: { fontSize: 22, color: colors.danger, fontWeight: '900' },
+  remainingLabel: { fontSize: 11, color: colors.danger, fontWeight: '900', letterSpacing: 2 },
+  remainingHint: { fontSize: 11, color: colors.textMuted, marginTop: 3 },
+  remainingValue: { fontSize: 28, color: colors.danger, fontWeight: '900', letterSpacing: -0.5 },
 
   actionsRow: {
     flexDirection: 'row',
@@ -912,10 +907,9 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     marginTop: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    borderRadius: radii.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   metaItem: { flex: 1 },
   metaLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '800', letterSpacing: 1 },
