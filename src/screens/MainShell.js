@@ -148,7 +148,17 @@ export default function MainShell() {
                 Tolga Tosun
               </Text>
             </View>
-            {showDetailFull ? <CustomerColumn fullWidth /> : moduleContent}
+            {/* Modül içeriği her zaman DOM'da — CustomerColumn açıkken sadece gizlenir.
+                Böylece unmount olmaz, SectionList scroll pozisyonu korunur (kullanıcı
+                aşağıdan bir müşteriye tıklayıp × ile geri döndüğünde aynı yerde kalır). */}
+            <View style={{ flex: 1, display: showDetailFull ? 'none' : 'flex' }}>
+              {moduleContent}
+            </View>
+            {showDetailFull && (
+              <View style={{ flex: 1 }}>
+                <CustomerColumn fullWidth />
+              </View>
+            )}
           </View>
           <BottomNav />
         </View>
