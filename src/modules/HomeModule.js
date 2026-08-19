@@ -232,6 +232,9 @@ export default function HomeModule() {
           <Text style={styles.progressRight}>{formatShort(stats.totalDebt)} bekliyor</Text>
         </View>
 
+        {/* Bölüm başlığı — Taksitler */}
+        <SectionHeader title="YAKLAŞAN TAKSİTLER" />
+
         {/* Sekmeler */}
         <View style={styles.tabs}>
           {TABS.map((t) => {
@@ -283,7 +286,7 @@ export default function HomeModule() {
 
         {/* Hatırlatma — uzun süre iletişim yok */}
         <View style={styles.sectionSpacer} />
-        <Text style={styles.sectionTitle}>HATIRLATMA · UZUN SÜRE İLETİŞİM YOK</Text>
+        <SectionHeader title="HATIRLATMA" subtitle="uzun süre iletişim yok" count={needAttention.length} />
         <View style={styles.dropRow}>
           <Text style={styles.dropLabel}>Süre eşiği:</Text>
           <Dropdown value={threshold} onChange={setThreshold} options={REMINDER_OPTIONS} />
@@ -308,7 +311,7 @@ export default function HomeModule() {
 
         {/* Hızlı işlem */}
         <View style={styles.sectionSpacer} />
-        <Text style={styles.sectionTitle}>HIZLI İŞLEM</Text>
+        <SectionHeader title="HIZLI İŞLEM" />
         <View>
           <ActionRow
             label="Yeni Müşteri Ekle"
@@ -589,6 +592,7 @@ function ActionRow({ label, desc, onPress }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.ledgerRow}>
       <View style={styles.ledgerMain}>
+        <View style={styles.actionDot} />
         <View style={{ flex: 1 }}>
           <Text style={styles.actionLabel}>{label}</Text>
           {!!desc && <Text style={styles.ledgerMeta}>{desc}</Text>}
@@ -596,6 +600,24 @@ function ActionRow({ label, desc, onPress }) {
         <Text style={styles.actionChev}>›</Text>
       </View>
     </TouchableOpacity>
+  );
+}
+
+// Bölüm başlığı — sol altın ince şerit + başlık + opsiyonel count
+function SectionHeader({ title, subtitle, count }) {
+  return (
+    <View style={styles.sectionHead}>
+      <View style={styles.sectionBar} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+      {count != null && count > 0 && (
+        <View style={styles.sectionCountWrap}>
+          <Text style={styles.sectionCountTxt}>{count}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -656,15 +678,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
     marginBottom: 4,
+    marginTop: -6,
   },
   tab: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     marginBottom: -1,
   },
   tabActive: {
-    borderBottomColor: colors.textPrimary,
+    borderBottomColor: colors.gold,
   },
   tabTxt: {
     fontSize: 14,
@@ -743,31 +766,78 @@ const styles = StyleSheet.create({
   emptyTitle: { color: colors.textSecondary, fontSize: 14, fontWeight: '700' },
   emptySub: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
 
-  // Bölüm başlığı
-  sectionSpacer: { height: 30 },
+  // Bölüm başlığı — altın ince şerit + başlık + count
+  sectionSpacer: { height: 36 },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.15)',
+  },
+  sectionBar: {
+    width: 3,
+    height: 18,
+    backgroundColor: colors.gold,
+    borderRadius: 2,
+  },
   sectionTitle: {
+    fontSize: 12,
+    color: colors.gold,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+  },
+  sectionSubtitle: {
     fontSize: 10,
     color: colors.textMuted,
-    fontWeight: '800',
-    letterSpacing: 2,
-    marginBottom: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginTop: 2,
+    textTransform: 'lowercase',
+  },
+  sectionCountWrap: {
+    minWidth: 24,
+    height: 22,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    backgroundColor: 'rgba(201, 169, 97, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 169, 97, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionCountTxt: {
+    color: colors.gold,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 
   dropRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 4,
+    marginBottom: 6,
+    marginTop: 2,
   },
   dropLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
 
+  actionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.gold,
+    marginRight: 4,
+  },
   actionLabel: {
     color: colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 3,
   },
-  actionChev: { color: colors.textMuted, fontSize: 22, marginLeft: 12 },
+  actionChev: { color: colors.gold, fontSize: 22, marginLeft: 12, fontWeight: '600' },
 
   // Swipe / × dismiss — mevcut işlev korunuyor
   dismissibleWrap: { position: 'relative' },
