@@ -80,17 +80,28 @@ export default function HomeModule() {
   const [tab, setTab] = useState('today');
 
   const stats = useMemo(() => {
-    const debtors = customers.filter((c) => (c.remainingAmount || 0) > 0);
-    const totalDebt = debtors.reduce((s, c) => s + (c.remainingAmount || 0), 0);
-    let paid = 0;
+    // Doğru tahsilat hesabı: (totalAmount - remainingAmount) = tahsil edilen.
+    // paymentHistory toplamı YANLIŞ olur çünkü peşinat (deposit) taksit değildir
+    // ve paymentHistory'ye eklenmez — bkz. customerService.js:445.
+    let totalRevenue = 0;      // Tüm zaman satış hacmi
+    let pendingReceivable = 0; // Bekleyen alacak (borçlu olsun olmasın toplam kalan)
+    let debtorCount = 0;
     for (const c of customers) {
-      if (Array.isArray(c.paymentHistory)) {
-        for (const p of c.paymentHistory) paid += (p.amount || 0);
-      }
+      totalRevenue += Number(c.totalAmount) || 0;
+      const rem = Number(c.remainingAmount) || 0;
+      pendingReceivable += rem;
+      if (rem > 0) debtorCount += 1;
     }
-    const totalSales = paid + totalDebt;
-    const pct = totalSales > 0 ? Math.round((paid / totalSales) * 100) : 0;
-    return { count: customers.length, debtorCount: debtors.length, totalDebt, paid, totalSales, pct };
+    const collected = Math.max(totalRevenue - pendingReceivable, 0);
+    const pct = totalRevenue > 0 ? Math.round((collected / totalRevenue) * 100) : 0;
+    return {
+      count: customers.length,
+      debtorCount,
+      totalDebt: pendingReceivable,
+      paid: collected,
+      totalSales: totalRevenue,
+      pct,
+    };
   }, [customers]);
 
   // 🔔 YAKLAŞAN TAKSİTLER — son 1 ay içinde kaydedilen müşteriler için
