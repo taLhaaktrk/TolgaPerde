@@ -83,14 +83,27 @@ export default function HomeModule() {
     // Doğru tahsilat hesabı: (totalAmount - remainingAmount) = tahsil edilen.
     // paymentHistory toplamı YANLIŞ olur çünkü peşinat (deposit) taksit değildir
     // ve paymentHistory'ye eklenmez — bkz. customerService.js:445.
-    let totalRevenue = 0;      // Tüm zaman satış hacmi
-    let pendingReceivable = 0; // Bekleyen alacak (borçlu olsun olmasın toplam kalan)
+    //
+    // Split (Kız/Erkek) müşteri savunması: eski form validation gevşek olduğu için
+    // top-level totalAmount ile sides.bride + sides.groom farklı olabilir. Sides
+    // varsa onlara güven — hakikati sides'ta tut.
+    let totalRevenue = 0;
+    let pendingReceivable = 0;
     let debtorCount = 0;
     for (const c of customers) {
-      totalRevenue += Number(c.totalAmount) || 0;
-      const rem = Number(c.remainingAmount) || 0;
-      pendingReceivable += rem;
-      if (rem > 0) debtorCount += 1;
+      let effTotal, effRem;
+      if (c.isSplit && c.sides) {
+        const b = c.sides.bride || {};
+        const g = c.sides.groom || {};
+        effTotal = (Number(b.totalAmount) || 0) + (Number(g.totalAmount) || 0);
+        effRem   = (Number(b.remainingAmount) || 0) + (Number(g.remainingAmount) || 0);
+      } else {
+        effTotal = Number(c.totalAmount) || 0;
+        effRem   = Number(c.remainingAmount) || 0;
+      }
+      totalRevenue += effTotal;
+      pendingReceivable += effRem;
+      if (effRem > 0) debtorCount += 1;
     }
     const collected = Math.max(totalRevenue - pendingReceivable, 0);
     const pct = totalRevenue > 0 ? Math.round((collected / totalRevenue) * 100) : 0;

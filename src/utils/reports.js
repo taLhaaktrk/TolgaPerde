@@ -47,8 +47,18 @@ export function computeReports(customers) {
   const list = Array.isArray(customers) ? customers : [];
 
   for (const c of list) {
-    const total = Number(c.totalAmount) || 0;
-    const remaining = Number(c.remainingAmount) || 0;
+    // Split (Kız/Erkek) müşteri savunması: sides varsa hakikat orada — top-level
+    // eski kayıtlarda form validation gevşek olduğu için tutarsız olabilirdi.
+    let total, remaining;
+    if (c.isSplit && c.sides) {
+      const b = c.sides.bride || {};
+      const g = c.sides.groom || {};
+      total = (Number(b.totalAmount) || 0) + (Number(g.totalAmount) || 0);
+      remaining = (Number(b.remainingAmount) || 0) + (Number(g.remainingAmount) || 0);
+    } else {
+      total = Number(c.totalAmount) || 0;
+      remaining = Number(c.remainingAmount) || 0;
+    }
     totalRevenue += total;
     pendingReceivable += remaining;
 
@@ -56,7 +66,7 @@ export function computeReports(customers) {
     const ref = toDate(c.orderDate) || toDate(c.createdAt);
     if (!ref) continue;
 
-    // Bu yılın aylık dağılımına ekle
+    // Bu yılın aylık dağılımına ekle (split defense uygulanmış total kullanılır)
     if (ref.getFullYear() === thisYear) {
       monthlySales[ref.getMonth()].value += total;
     }

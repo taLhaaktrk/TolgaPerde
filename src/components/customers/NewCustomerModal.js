@@ -221,11 +221,13 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
       );
       return;
     }
-    // Split validation — açıksa iki tarafın toplamı ana toplamı geçmesin
-    if (isSplit && (brideTotalNum + groomTotalNum) > totalNum + 0.5) {
+    // Split iken ana totalAmount OTOMATİK hesaplanır (bride + groom). Kullanıcı
+    // elle ana total giremez → top-level ve sides tutarları GARANTİ eşit olur,
+    // istatistiklerde tutarsızlık olmaz. Sadece iki tarafın 0 olmadığını kontrol et.
+    if (isSplit && (brideTotalNum + groomTotalNum) <= 0) {
       Alert.alert(
-        'Split Tutar Hatası',
-        `Kız (${brideTotalNum.toLocaleString('tr-TR')} ₺) + Erkek (${groomTotalNum.toLocaleString('tr-TR')} ₺) toplamı ana toplam (${totalNum.toLocaleString('tr-TR')} ₺) tutardan fazla olamaz.`,
+        'Tutar Gerekli',
+        'Kız ve Erkek tarafından en az birine tutar girmelisin.',
         [{ text: 'Tamam' }],
         { tone: 'warning' }
       );
@@ -244,7 +246,8 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
       const customer = {
         fullName: fullName.trim(),
         phone: mainPhone,
-        totalAmount: totalNum,
+        // Split iken TÜM top-level tutarlar sides toplamından türetilir → tutarlı
+        totalAmount: isSplit ? (brideTotalNum + groomTotalNum) : totalNum,
         deposit: isSplit ? (brideDepositNum + groomDepositNum) : depositNum,
         remainingAmount: isSplit ? (brideRemaining + groomRemaining) : remaining,
         notes: notes.trim(),
@@ -377,16 +380,18 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
 
             {/* ── ÖDEME PLANI ── */}
             <Text style={styles.sectionHeader}>ÖDEME PLANI</Text>
-            <View style={styles.row2}>
-              <Field
-                label="Toplam Tutar (₺)"
-                value={total}
-                onChangeText={(v) => setTotal(formatAmountTR(v))}
-                placeholder="0"
-                keyboardType="number-pad"
-                style={{ flex: 1 }}
-              />
-              {!isSplit && (
+            {/* Split iken ana Toplam/Peşinat GİZLİ — sides toplamından otomatik hesaplanır.
+                Böylece kullanıcı elle tutarsız değer giremez. */}
+            {!isSplit && (
+              <View style={styles.row2}>
+                <Field
+                  label="Toplam Tutar (₺)"
+                  value={total}
+                  onChangeText={(v) => setTotal(formatAmountTR(v))}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  style={{ flex: 1 }}
+                />
                 <Field
                   label="Alınan Peşinat (₺)"
                   value={deposit}
@@ -395,8 +400,8 @@ export default function NewCustomerModal({ visible, onClose, onSaved, editingCus
                   keyboardType="number-pad"
                   style={{ flex: 1 }}
                 />
-              )}
-            </View>
+              </View>
+            )}
 
             {/* Split alanları — iki taraf */}
             {isSplit && (
