@@ -1,26 +1,35 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
-import ModuleHeader from '../components/shell/ModuleHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../components/ui/Dropdown';
 import Alert from '../utils/alert';
 import useCustomers from '../hooks/useCustomers';
 import useDeviceType from '../hooks/useDeviceType';
-import {
-  useAppShell,
-  MODULE_CUSTOMERS,
-} from '../context/AppShellContext';
+import { useAppShell, MODULE_CUSTOMERS } from '../context/AppShellContext';
 import { getInstallmentStatus } from '../utils/installments';
 import { sendWhatsAppReminder, sendStaleReminder } from '../utils/whatsapp';
 import {
   dismissInstallmentReminder,
   dismissAttentionReminder,
 } from '../services/customerService';
-import { colors, gradients, spacing, radii, shadows } from '../theme/colors';
+import { colors } from '../theme/colors';
+
+const TR_MONTHS = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+const TR_DAYS   = ['PAZAR','PAZARTESİ','SALI','ÇARŞAMBA','PERŞEMBE','CUMA','CUMARTESİ'];
 
 const formatTL = (n) =>
   (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₺';
+
+const formatShort = (n) => {
+  const v = n || 0;
+  if (v >= 1_000_000) {
+    const mn = v / 1_000_000;
+    return (mn >= 10 ? mn.toFixed(0) : mn.toFixed(1)) + ' Mn ₺';
+  }
+  if (v >= 1_000) return Math.round(v / 1_000) + ' B ₺';
+  return v.toLocaleString('tr-TR') + ' ₺';
+};
 
 const toDate = (ts) => {
   if (!ts) return null;
@@ -29,12 +38,20 @@ const toDate = (ts) => {
   return null;
 };
 
-const daysAgo = (date) => {
-  if (!date) return null;
-  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+const daysAgo = (date) =>
+  date ? Math.floor((Date.now() - date.getTime()) / 86400000) : null;
+
+const todayHeader = () => {
+  const d = new Date();
+  return `${d.getDate()} ${TR_MONTHS[d.getMonth()]} ${d.getFullYear()} · ${TR_DAYS[d.getDay()]}`;
 };
 
-// Hatırlatma süresi seçenekleri — ay/yıl etiketli, gün değerli
+const startOfToday = () => {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t.getTime();
+};
+
 const REMINDER_OPTIONS = [
   { label: '1 ay',    value: 30 },
   { label: '2 ay',    value: 60 },
@@ -49,31 +66,38 @@ const REMINDER_OPTIONS = [
 const labelForDays = (days) =>
   REMINDER_OPTIONS.find((o) => o.value === days)?.label || `${days} gün`;
 
+const TABS = [
+  { key: 'today',   label: 'Bugün' },
+  { key: 'overdue', label: 'Gecikmiş' },
+  { key: 'week',    label: 'Bu hafta' },
+];
+
 export default function HomeModule() {
   const { customers, loading } = useCustomers(500);
   const { setActiveModule, setActiveCustomer } = useAppShell();
-  const { isPhone } = useDeviceType();
-  const [threshold, setThreshold] = useState(30); // gün cinsinden, varsayılan 1 ay
+  const insets = useSafeAreaInsets();
+  const [threshold, setThreshold] = useState(30);
+  const [tab, setTab] = useState('today');
 
   const stats = useMemo(() => {
     const debtors = customers.filter((c) => (c.remainingAmount || 0) > 0);
     const totalDebt = debtors.reduce((s, c) => s + (c.remainingAmount || 0), 0);
-    return {
-      count: customers.length,
-      debtorCount: debtors.length,
-      totalDebt,
-    };
+    let paid = 0;
+    for (const c of customers) {
+      if (Array.isArray(c.paymentHistory)) {
+        for (const p of c.paymentHistory) paid += (p.amount || 0);
+      }
+    }
+    const totalSales = paid + totalDebt;
+    const pct = totalSales > 0 ? Math.round((paid / totalSales) * 100) : 0;
+    return { count: customers.length, debtorCount: debtors.length, totalDebt, paid, totalSales, pct };
   }, [customers]);
 
-  // 🔔 YAKLAŞAN TAKSİTLER: installmentPlan içindeki ödenmemiş + vadesi gelmiş
-  // veya 3 gün içinde gelecek olanlar. SADECE son 1 ay içinde kaydedilen müşteriler
-  // için (eski müşteriler "uzun süre iletişim yok" listesinde zaten görünüyor).
+  // 🔔 YAKLAŞAN TAKSİTLER — son 1 ay içinde kaydedilen müşteriler için
   const upcomingInstallments = useMemo(() => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-    // Müşteri başına grupla — bir müşterinin birden çok geciken taksiti varsa
-    // tek satırda toplanır, kullanıcı dokunarak detayları görür.
     const groups = new Map();
     for (const c of customers) {
       const created = toDate(c.createdAt);
@@ -101,14 +125,12 @@ export default function HomeModule() {
       }
       if (overdueList.length === 0) continue;
 
-      // En eski vadeli üstte
       overdueList.sort((a, b) =>
         (a.dueDate?.getTime?.() || 0) - (b.dueDate?.getTime?.() || 0)
       );
       const oldest = overdueList[0];
       const totalDue = overdueList.reduce(
-        (s, x) => s + (x.installment.tutar || 0),
-        0
+        (s, x) => s + (x.installment.tutar || 0), 0
       );
 
       groups.set(c.id, {
@@ -120,18 +142,39 @@ export default function HomeModule() {
         oldestDueDate: oldest.dueDate,
       });
     }
-    // Müşterileri en eski vadeli olana göre sırala
     return Array.from(groups.values()).sort((a, b) =>
       (a.oldestDueDate?.getTime?.() || 0) - (b.oldestDueDate?.getTime?.() || 0)
     );
   }, [customers]);
 
-  // Hatırlatma: HER müşteri (borçlu + borçsuz) — threshold gün boyunca aktivite yoksa
-  // listede çıkar. Eski müşteriyle tekrar iletişim için.
+  const todayMs = startOfToday();
+  const weekMs = todayMs + 7 * 86400000;
+
+  // Sekmeye göre filtre
+  const filteredUpcoming = useMemo(() => {
+    return upcomingInstallments.filter((g) => {
+      const d = new Date(g.oldestDueDate);
+      d.setHours(0, 0, 0, 0);
+      const ms = d.getTime();
+      if (tab === 'today')   return ms === todayMs;
+      if (tab === 'overdue') return ms < todayMs;
+      if (tab === 'week')    return ms >= todayMs && ms <= weekMs;
+      return true;
+    });
+  }, [upcomingInstallments, tab, todayMs, weekMs]);
+
+  const overdueCount = useMemo(() =>
+    upcomingInstallments.filter((g) => {
+      const d = new Date(g.oldestDueDate);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() < todayMs;
+    }).length,
+  [upcomingInstallments, todayMs]);
+
+  // Hatırlatma — uzun süre iletişim yok
   const needAttention = useMemo(() => {
     return customers
       .map((c) => {
-        // lastPaymentAt boşsa paymentHistory'den en güncel ödemeyi türet
         let lastPay = toDate(c.lastPaymentAt);
         if (!lastPay && Array.isArray(c.paymentHistory) && c.paymentHistory.length > 0) {
           let maxDate = null;
@@ -156,34 +199,74 @@ export default function HomeModule() {
     setActiveModule(MODULE_CUSTOMERS);
   };
 
+  const filledPct = Math.min(100, Math.max(0, stats.pct));
+
   return (
     <View style={styles.flex}>
-      <ModuleHeader eyebrow="HOŞGELDİN" title="Ana Sayfa" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.statsRow, isPhone && styles.statsRowPhone]}>
-          <StatCard label="Toplam Müşteri" value={loading ? '…' : String(stats.count)} accent={colors.primary} isPhone={isPhone} />
-          <StatCard label="Borçlu" value={loading ? '…' : String(stats.debtorCount)} accent={colors.danger} isPhone={isPhone} />
-          <StatCard label="Toplam Alacak" value={loading ? '…' : formatTL(stats.totalDebt)} accent={colors.gold} isPhone={isPhone} />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: (insets.top || 12) + 16 }]}
+      >
+        {/* Üst başlık — defter stili */}
+        <Text style={styles.dateHeader}>{todayHeader()}</Text>
+        <Text
+          style={styles.bigTotal}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+        >
+          {loading ? '…' : formatTL(stats.totalDebt)}
+        </Text>
+        <Text style={styles.bigSub}>
+          toplam alacak · {stats.debtorCount} borçlu müşteri
+        </Text>
+
+        {/* Progress bar */}
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${filledPct}%` }]} />
+        </View>
+        <View style={styles.progressMeta}>
+          <Text style={styles.progressLeft}>
+            <Text style={{ color: colors.success, fontWeight: '700' }}>%{stats.pct} tahsil</Text>
+            {'  ·  '}{formatShort(stats.paid)}
+          </Text>
+          <Text style={styles.progressRight}>{formatShort(stats.totalDebt)} bekliyor</Text>
         </View>
 
-        {/* 🔔 Yaklaşan Taksitler */}
-        <View style={styles.attentionHeader}>
-          <Text style={styles.sectionTitle}>🔔 YAKLAŞAN TAKSİTLER</Text>
+        {/* Sekmeler */}
+        <View style={styles.tabs}>
+          {TABS.map((t) => {
+            const active = tab === t.key;
+            const label = t.key === 'overdue' && overdueCount > 0
+              ? `Gecikmiş ${overdueCount}`
+              : t.label;
+            return (
+              <TouchableOpacity
+                key={t.key}
+                onPress={() => setTab(t.key)}
+                activeOpacity={0.6}
+                style={[styles.tab, active && styles.tabActive]}
+              >
+                <Text style={[styles.tabTxt, active && styles.tabTxtActive]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        {upcomingInstallments.length === 0 ? (
-          <View style={[styles.emptyAttention, shadows.sm, { marginBottom: spacing.xxl }]}>
-            <Text style={styles.emptyTitle}>Vadesi yaklaşan taksit yok</Text>
-            <Text style={styles.emptySub}>
-              Tüm planlı taksitler vade öncesi — şu an için hatırlatma gerekmiyor.
+
+        {/* Yaklaşan taksitler listesi */}
+        {filteredUpcoming.length === 0 ? (
+          <View style={styles.emptyRow}>
+            <Text style={styles.emptyTitle}>
+              {tab === 'today'   ? 'Bugün vadesi yok'
+              : tab === 'overdue' ? 'Geciken taksit yok'
+              : /* week */         'Bu hafta vadesi yok'}
             </Text>
           </View>
         ) : (
-          <View style={[styles.attentionList, { marginBottom: spacing.xxl }]}>
-            {upcomingInstallments.map((group) => (
+          <View>
+            {filteredUpcoming.map((group) => (
               <DismissibleRow
                 key={group.key}
                 onDismiss={() => {
-                  // Bu müşterinin tüm vadeli taksitlerini gizle
                   group.installments.forEach((it) =>
                     dismissInstallmentReminder(group.customer.id, it.installment.id)
                   );
@@ -198,52 +281,43 @@ export default function HomeModule() {
           </View>
         )}
 
-        {/* Hatırlatma — iletişim süresi geçen müşteriler */}
-        <View style={styles.attentionHeader}>
-          <Text style={styles.sectionTitle}>HATIRLATMA — UZUN SÜRE İLETİŞİME GEÇİLMEYEN MÜŞTERİLER</Text>
-        </View>
-        <View style={styles.sliderRow}>
-          <Text style={styles.sliderLabel}>Süre eşiği:</Text>
-          <Dropdown
-            value={threshold}
-            onChange={setThreshold}
-            options={REMINDER_OPTIONS}
-          />
+        {/* Hatırlatma — uzun süre iletişim yok */}
+        <View style={styles.sectionSpacer} />
+        <Text style={styles.sectionTitle}>HATIRLATMA · UZUN SÜRE İLETİŞİM YOK</Text>
+        <View style={styles.dropRow}>
+          <Text style={styles.dropLabel}>Süre eşiği:</Text>
+          <Dropdown value={threshold} onChange={setThreshold} options={REMINDER_OPTIONS} />
         </View>
 
         {needAttention.length === 0 ? (
-          <View style={[styles.emptyAttention, shadows.sm]}>
+          <View style={styles.emptyRow}>
             <Text style={styles.emptyTitle}>Hatırlatma yok</Text>
             <Text style={styles.emptySub}>
-              Son {labelForDays(threshold)} içinde iletişime geçilmemiş müşteri yok.
+              Son {labelForDays(threshold)} içinde iletişimsiz müşteri yok.
             </Text>
           </View>
         ) : (
-          <View style={styles.attentionList}>
+          <View>
             {needAttention.map((c) => (
-              <DismissibleRow
-                key={c.id}
-                onDismiss={() => dismissAttentionReminder(c.id)}
-              >
+              <DismissibleRow key={c.id} onDismiss={() => dismissAttentionReminder(c.id)}>
                 <AttentionRow customer={c} onPress={() => openCustomer(c)} />
               </DismissibleRow>
             ))}
           </View>
         )}
 
-        <Text style={[styles.sectionTitle, { marginTop: spacing.xxl }]}>HIZLI İŞLEM</Text>
-
-        <View style={styles.actionsGrid}>
-          <ActionCard
-            title="Yeni Müşteri Ekle"
-            desc="Müşteri bilgilerini ve ödeme detaylarını gir"
-            accent={colors.primary}
+        {/* Hızlı işlem */}
+        <View style={styles.sectionSpacer} />
+        <Text style={styles.sectionTitle}>HIZLI İŞLEM</Text>
+        <View>
+          <ActionRow
+            label="Yeni Müşteri Ekle"
+            desc="Müşteri bilgilerini ve ödeme planını gir"
             onPress={() => setActiveModule(MODULE_CUSTOMERS)}
           />
-          <ActionCard
-            title="Müşterileri Görüntüle"
+          <ActionRow
+            label="Müşterileri Görüntüle"
             desc="Tüm müşteri listesi ve arama"
-            accent={colors.info}
             onPress={() => setActiveModule(MODULE_CUSTOMERS)}
           />
         </View>
@@ -252,46 +326,7 @@ export default function HomeModule() {
   );
 }
 
-// Hex rengi rgba tint'e çevir. accent '#RRGGBB' varsayımı.
-function tintOf(hex, alpha = 0.14) {
-  if (!hex || hex.length < 7) return `rgba(255,255,255,${alpha})`;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function StatCard({ label, value, accent, isPhone }) {
-  const tintBg = tintOf(accent, 0.13);
-  return (
-    <View style={[
-      styles.statCard,
-      isPhone && styles.statCardPhone,
-      { backgroundColor: tintBg, borderColor: tintOf(accent, 0.25) },
-    ]}>
-      {isPhone ? (
-        <View style={styles.statRowPhone}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.statLabelPhone, { color: accent }]}>{label}</Text>
-          </View>
-          <Text style={[styles.statValuePhone, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-            {value}
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={[styles.statDot, { backgroundColor: accent }]} />
-          <Text style={[styles.statLabel, { color: accent }]}>{label}</Text>
-          <Text style={styles.statValue}>{value}</Text>
-        </>
-      )}
-    </View>
-  );
-}
-
-// Satırı gizlemek için sarmalayıcı.
-// Mobil: sola swipe → kırmızı "Sil" paneli görünür → onDismiss
-// Masaüstü: sağ üstte küçük × butonu visible → onDismiss
+// Sola swipe (mobil) veya × (masaüstü) ile satırı gizle
 function DismissibleRow({ onDismiss, children }) {
   const { isDesktop } = useDeviceType();
 
@@ -299,11 +334,7 @@ function DismissibleRow({ onDismiss, children }) {
     return (
       <View style={styles.dismissibleWrap}>
         {children}
-        <TouchableOpacity
-          style={styles.dismissBtn}
-          onPress={onDismiss}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss} activeOpacity={0.7}>
           <Text style={styles.dismissBtnTxt}>×</Text>
         </TouchableOpacity>
       </View>
@@ -334,18 +365,11 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
   const { customer, installments, totalPlanCount, totalDueAmount } = group;
   const [expanded, setExpanded] = useState(false);
 
-  // En eski taksiti referans al — kart başlığı + WhatsApp mesajı için
   const oldest = installments[0];
-  const oldestStatus = oldest.status;
-  const isOverdue = oldestStatus === 'overdue';
-  const accentColor = isOverdue ? colors.danger : colors.warning;
+  const isOverdue = oldest.status === 'overdue';
+  const amountColor = isOverdue ? colors.danger : colors.warning;
 
-  // Gün hesabı
-  const todayMs = (() => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    return t.getTime();
-  })();
+  const todayMs = startOfToday();
   const dueMs = (() => {
     const d = new Date(oldest.dueDate);
     d.setHours(0, 0, 0, 0);
@@ -354,23 +378,21 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
   const diffDays = Math.round((dueMs - todayMs) / 86400000);
   const daysOverdue = diffDays < 0 ? Math.abs(diffDays) : 0;
 
-  let dueLabel;
-  if (diffDays === 0) dueLabel = 'BUGÜN vadesi';
-  else if (diffDays === 1) dueLabel = 'YARIN vadesi';
-  else if (diffDays < 0) dueLabel = `${daysOverdue} gün gecikme`;
-  else dueLabel = `${diffDays} gün kaldı`;
+  const dateStr = new Date(oldest.dueDate).toLocaleDateString('tr-TR', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+  });
+  const gecikmeStr =
+    diffDays < 0 ? `${daysOverdue} gün gecikme`
+    : diffDays === 0 ? 'BUGÜN vadesi'
+    : `${diffDays} gün kaldı`;
+  const metaStr = installments.length > 1
+    ? `${dateStr} · ${gecikmeStr} · ${installments.length} taksit`
+    : `${dateStr} · ${gecikmeStr}`;
 
-  const countLabel =
-    installments.length === 1
-      ? '1 taksit bekliyor'
-      : `${installments.length} taksit bekliyor`;
-
-  // Split müşteride tarafa göre alt gruplar oluştur
   const isSplitCust = !!customer.isSplit && customer.sides;
   const brideItems = isSplitCust ? installments.filter((it) => it.installment.side === 'bride') : [];
   const groomItems = isSplitCust ? installments.filter((it) => it.installment.side === 'groom') : [];
 
-  // Belirli bir tarafın WhatsApp gönderimi
   const sendSideWhatsApp = async (sideKey) => {
     const sideData = customer.sides?.[sideKey];
     const sideItems = sideKey === 'bride' ? brideItems : groomItems;
@@ -379,8 +401,7 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       Alert.alert(
         'Telefon Yok',
         `${customer.fullName} — ${sideKey === 'bride' ? 'Kız Tarafı' : 'Erkek Tarafı'} için telefon kayıtlı değil.`,
-        [{ text: 'Tamam' }],
-        { tone: 'warning' }
+        [{ text: 'Tamam' }], { tone: 'warning' }
       );
       return;
     }
@@ -388,10 +409,8 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
     const sideDue = new Date(sideOldest.dueDate); sideDue.setHours(0, 0, 0, 0);
     const sideDiff = Math.round((sideDue.getTime() - todayMs) / 86400000);
     const sideDaysOverdue = sideDiff < 0 ? Math.abs(sideDiff) : 0;
-    // Side içi installment sayısı = o tarafın kendi installmentPlan uzunluğu
-    const sideTotalPlanCount = Array.isArray(sideData.installmentPlan) ? sideData.installmentPlan.length : 0;
-    // Side içi installmentNo — bu taksitin o tarafın planındaki sırası
     const sidePlan = Array.isArray(sideData.installmentPlan) ? sideData.installmentPlan : [];
+    const sideTotalPlanCount = sidePlan.length;
     const sideInstallmentNo = sidePlan.findIndex((p) => p.id === sideOldest.installment.id) + 1;
     const result = await sendWhatsAppReminder({
       customerName: `${customer.fullName} (${sideKey === 'bride' ? 'Kız' : 'Erkek'})`,
@@ -404,12 +423,7 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       daysOverdue: sideDaysOverdue,
     });
     if (!result.ok) {
-      Alert.alert(
-        'WhatsApp Açılamadı',
-        result.reason || 'Bilinmeyen hata',
-        [{ text: 'Tamam' }],
-        { tone: 'danger' }
-      );
+      Alert.alert('WhatsApp Açılamadı', result.reason || 'Bilinmeyen hata', [{ text: 'Tamam' }], { tone: 'danger' });
     }
   };
 
@@ -418,8 +432,7 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       Alert.alert(
         'Telefon Yok',
         `${customer.fullName} için kayıtlı telefon numarası bulunmuyor. Önce müşteri kartını düzenleyip telefonu ekle.`,
-        [{ text: 'Tamam' }],
-        { tone: 'warning' }
+        [{ text: 'Tamam' }], { tone: 'warning' }
       );
       return;
     }
@@ -431,124 +444,88 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       installmentNo: oldest.installmentNo,
       totalInstallments: totalPlanCount,
       remainingDebt: customer.remainingAmount,
-      daysOverdue, // 30+ → "uzun gecikme" varyantı
+      daysOverdue,
     });
     if (!result.ok) {
-      Alert.alert(
-        'WhatsApp Açılamadı',
-        result.reason || 'Bilinmeyen hata',
-        [{ text: 'Tamam' }],
-        { tone: 'danger' }
-      );
+      Alert.alert('WhatsApp Açılamadı', result.reason || 'Bilinmeyen hata', [{ text: 'Tamam' }], { tone: 'danger' });
     }
   };
 
   return (
-    <View style={[styles.upcomingRow, shadows.sm, { borderLeftColor: accentColor }]}>
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => setExpanded((e) => !e)}
-        style={styles.upcomingTop}
-      >
-        <View style={[styles.upcomingDot, { backgroundColor: accentColor }]} />
-        <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={styles.upcomingName}>{customer.fullName || '—'}</Text>
-          <Text style={[styles.upcomingMeta, { color: accentColor }]}>
-            {countLabel} · {dueLabel}
-          </Text>
-        </View>
-        <View style={styles.upcomingAmountWrap}>
-          <Text style={styles.upcomingAmountVal}>
+    <View style={styles.ledgerRow}>
+      <View style={styles.ledgerMain}>
+        <TouchableOpacity
+          onPress={() => setExpanded((e) => !e)}
+          activeOpacity={0.6}
+          style={{ flex: 1, paddingRight: 8 }}
+        >
+          <Text style={styles.ledgerName} numberOfLines={1}>{customer.fullName || '—'}</Text>
+          <Text style={styles.ledgerMeta} numberOfLines={1}>{metaStr}</Text>
+        </TouchableOpacity>
+        <View style={styles.ledgerRight}>
+          <Text style={[styles.ledgerAmount, { color: amountColor }]}>
             {(totalDueAmount || 0).toLocaleString('tr-TR')} ₺
           </Text>
-          <Text style={styles.upcomingExpandHint}>{expanded ? 'gizle ▾' : 'detay ▸'}</Text>
+          {isSplitCust ? (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+              {brideItems.length > 0 && (
+                <TouchableOpacity onPress={() => sendSideWhatsApp('bride')} activeOpacity={0.6}>
+                  <Text style={styles.waLink}>K · WP</Text>
+                </TouchableOpacity>
+              )}
+              {groomItems.length > 0 && (
+                <TouchableOpacity onPress={() => sendSideWhatsApp('groom')} activeOpacity={0.6}>
+                  <Text style={styles.waLink}>E · WP</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity onPress={handleWhatsApp} activeOpacity={0.6} style={{ marginTop: 2 }}>
+              <Text style={styles.waLink}>WhatsApp</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      </TouchableOpacity>
+      </View>
 
-      {/* Genişletilmiş taksit listesi */}
+      {/* Detay — taksitler + kartı aç linki */}
       {expanded && (
-        <View style={styles.expandedList}>
-          {installments.map((it, idx) => {
-            const d = new Date(it.dueDate);
-            d.setHours(0, 0, 0, 0);
-            const diff = Math.round((d.getTime() - todayMs) / 86400000);
-            const lbl =
-              diff < 0 ? `${Math.abs(diff)} gün gecikme` :
-              diff === 0 ? 'Bugün' :
-              `${diff} gün kaldı`;
-            const sideBadge = it.installment.side === 'bride'
-              ? { txt: 'K', color: colors.gold }
-              : it.installment.side === 'groom'
-                ? { txt: 'E', color: colors.info }
-                : null;
-            return (
-              <View key={it.installment.id} style={styles.expandedItem}>
-                {sideBadge ? (
-                  <View style={[styles.sideBadge, { backgroundColor: sideBadge.color }]}>
-                    <Text style={styles.sideBadgeTxt}>{sideBadge.txt}</Text>
+        <View style={styles.expanded}>
+          {installments.length > 1 && (
+            <View style={styles.instList}>
+              {installments.map((it) => {
+                const d = new Date(it.dueDate); d.setHours(0, 0, 0, 0);
+                const diff = Math.round((d.getTime() - todayMs) / 86400000);
+                const lbl =
+                  diff < 0 ? `${Math.abs(diff)} gün gecikme`
+                  : diff === 0 ? 'Bugün'
+                  : `${diff} gün kaldı`;
+                const side = it.installment.side;
+                const noLbl = side === 'bride' ? 'K'
+                           : side === 'groom' ? 'E'
+                           : `${it.installmentNo}.`;
+                return (
+                  <View key={it.installment.id} style={styles.instItem}>
+                    <Text style={styles.instNo}>{noLbl}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.instDate}>
+                        {new Date(it.dueDate).toLocaleDateString('tr-TR')}
+                      </Text>
+                      <Text style={[styles.instStatus, { color: it.status === 'overdue' ? colors.danger : colors.warning }]}>
+                        {lbl}
+                      </Text>
+                    </View>
+                    <Text style={styles.instAmount}>
+                      {(it.installment.tutar || 0).toLocaleString('tr-TR')} ₺
+                    </Text>
                   </View>
-                ) : (
-                  <Text style={styles.expandedItemNo}>{it.installmentNo}.</Text>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.expandedItemDate}>
-                    {new Date(it.dueDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                  </Text>
-                  <Text style={[styles.expandedItemStatus, { color: it.status === 'overdue' ? colors.danger : colors.warning }]}>
-                    {lbl}
-                  </Text>
-                </View>
-                <Text style={styles.expandedItemAmount}>
-                  {(it.installment.tutar || 0).toLocaleString('tr-TR')} ₺
-                </Text>
-              </View>
-            );
-          })}
-          <TouchableOpacity activeOpacity={0.7} onPress={onOpen} style={styles.openCustomerBtn}>
-            <Text style={styles.openCustomerTxt}>Müşteri kartını aç ›</Text>
+                );
+              })}
+            </View>
+          )}
+          <TouchableOpacity onPress={onOpen} activeOpacity={0.6} style={{ alignSelf: 'flex-end' }}>
+            <Text style={styles.openLink}>Kartı aç ›</Text>
           </TouchableOpacity>
         </View>
-      )}
-
-      {/* WhatsApp butonları — split ise 2 buton (Kız/Erkek), değilse tek */}
-      {isSplitCust ? (
-        <View style={styles.splitWaRow}>
-          {brideItems.length > 0 && (
-            <TouchableOpacity activeOpacity={0.85} onPress={() => sendSideWhatsApp('bride')} style={{ flex: 1 }}>
-              <LinearGradient
-                colors={['#25D366', '#1EB055']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.waBtn, { marginTop: 0 }]}
-              >
-                <Text style={styles.waBtnTxt}>KIZ TARAFI · WP</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-          {groomItems.length > 0 && (
-            <TouchableOpacity activeOpacity={0.85} onPress={() => sendSideWhatsApp('groom')} style={{ flex: 1 }}>
-              <LinearGradient
-                colors={['#25D366', '#1EB055']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.waBtn, { marginTop: 0 }]}
-              >
-                <Text style={styles.waBtnTxt}>ERKEK TARAFI · WP</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-        </View>
-      ) : (
-        <TouchableOpacity activeOpacity={0.85} onPress={handleWhatsApp}>
-          <LinearGradient
-            colors={['#25D366', '#1EB055']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.waBtn}
-          >
-            <Text style={styles.waBtnTxt}>WHATSAPP İLE HATIRLAT</Text>
-          </LinearGradient>
-        </TouchableOpacity>
       )}
     </View>
   );
@@ -560,8 +537,7 @@ function AttentionRow({ customer, onPress }) {
       Alert.alert(
         'Telefon Yok',
         `${customer.fullName} için kayıtlı telefon numarası bulunmuyor. Önce müşteri kartını düzenleyip telefonu ekle.`,
-        [{ text: 'Tamam' }],
-        { tone: 'warning' }
+        [{ text: 'Tamam' }], { tone: 'warning' }
       );
       return;
     }
@@ -573,276 +549,232 @@ function AttentionRow({ customer, onPress }) {
       remainingDebt: customer.remainingAmount,
     });
     if (!result.ok) {
-      Alert.alert(
-        'WhatsApp Açılamadı',
-        result.reason || 'Bilinmeyen hata',
-        [{ text: 'Tamam' }],
-        { tone: 'danger' }
-      );
+      Alert.alert('WhatsApp Açılamadı', result.reason || 'Bilinmeyen hata', [{ text: 'Tamam' }], { tone: 'danger' });
     }
   };
 
+  const hasDebt = (customer.remainingAmount || 0) > 0;
+
   return (
-    <View style={[styles.attentionRow, shadows.sm]}>
-      <View style={styles.attentionDot} />
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={onPress}
-        style={styles.attentionMain}
-      >
-        <Text style={styles.attentionName}>{customer.fullName || '—'}</Text>
-        <Text style={styles.attentionMeta}>
-          {customer._hasPayment
-            ? `Son ödeme ${customer._daysSince} gün önce`
-            : `Sipariş üzerinden ${customer._daysSince} gün geçti, ödeme yok`}
-          {customer.phone ? ` · ${customer.phone}` : ''}
-        </Text>
-      </TouchableOpacity>
-      <View style={styles.attentionAmount}>
-        <Text style={styles.attentionAmountLabel}>Kalan</Text>
-        <Text style={styles.attentionAmountVal}>{formatTL(customer.remainingAmount)}</Text>
+    <View style={styles.ledgerRow}>
+      <View style={styles.ledgerMain}>
+        <TouchableOpacity
+          onPress={onPress}
+          activeOpacity={0.6}
+          style={{ flex: 1, paddingRight: 8 }}
+        >
+          <Text style={styles.ledgerName} numberOfLines={1}>{customer.fullName || '—'}</Text>
+          <Text style={styles.ledgerMeta} numberOfLines={1}>
+            {customer._hasPayment
+              ? `Son ödeme ${customer._daysSince} gün önce`
+              : `${customer._daysSince} gündür iletişim yok`}
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.ledgerRight}>
+          {hasDebt && (
+            <Text style={[styles.ledgerAmount, { color: colors.danger }]}>
+              {formatTL(customer.remainingAmount)}
+            </Text>
+          )}
+          <TouchableOpacity onPress={handleWhatsApp} activeOpacity={0.6} style={{ marginTop: hasDebt ? 2 : 0 }}>
+            <Text style={styles.waLink}>WhatsApp</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={handleWhatsApp}
-        style={styles.attentionWaBtn}
-      >
-        <LinearGradient
-          colors={['#25D366', '#1EB055']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <Text style={styles.attentionWaBtnTxt}>WP</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
-function ActionCard({ title, desc, accent, onPress }) {
+function ActionRow({ label, desc, onPress }) {
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={onPress}
-      style={[styles.actionCard, { borderLeftColor: accent || colors.primary }]}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.actionTitle}>{title}</Text>
-        <Text style={styles.actionDesc}>{desc}</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.ledgerRow}>
+      <View style={styles.ledgerMain}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.actionLabel}>{label}</Text>
+          {!!desc && <Text style={styles.ledgerMeta}>{desc}</Text>}
+        </View>
+        <Text style={styles.actionChev}>›</Text>
       </View>
-      <Text style={styles.actionChev}>›</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  flex: { flex: 1, backgroundColor: colors.bg },
+  content: {
+    paddingHorizontal: 22,
+    paddingBottom: 40,
+  },
 
-  statsRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xxl },
-  // Telefonda dikey istif — taşma olmaz, her satır tam genişlik
-  statsRowPhone: { flexDirection: 'column', gap: spacing.sm },
-  statCard: {
-    flex: 1,
-    borderRadius: 20,          // chunky
-    padding: spacing.lg,
-    paddingVertical: spacing.xl,
-    borderWidth: 1,
-    minHeight: 120,
-  },
-  statCardPhone: {
-    flex: 0,
-    minHeight: 78,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-    borderRadius: 18,
-  },
-  statDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  // Üst blok — defter başlık
+  dateHeader: {
+    color: colors.gold,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
     marginBottom: 10,
   },
-  statValue: { fontSize: 32, fontWeight: '900', color: colors.textPrimary, letterSpacing: -0.5 },
-  statLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8, textTransform: 'uppercase' },
-  // Telefon: tek satırda solda label, sağda büyük değer
-  statRowPhone: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  statLabelPhone: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    flex: 1,
-  },
-  statValuePhone: {
-    fontSize: 22,
-    fontWeight: '900',
+  bigTotal: {
     color: colors.textPrimary,
-    textAlign: 'right',
-    flexShrink: 1,
+    fontSize: 44,
+    fontWeight: '900',
+    letterSpacing: -1,
+    marginBottom: 4,
+  },
+  bigSub: {
+    color: colors.gold,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 18,
   },
 
-  sectionTitle: { fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 2, marginBottom: spacing.md },
-
-  attentionHeader: {
-    marginBottom: spacing.sm,
+  // Progress bar
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    marginBottom: 8,
   },
-  sliderRow: {
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.success,
+    borderRadius: 2,
+  },
+  progressMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 22,
+  },
+  progressLeft: { fontSize: 12, color: colors.textMuted },
+  progressRight: { fontSize: 12, color: colors.textMuted },
+
+  // Sekmeler
+  tabs: {
+    flexDirection: 'row',
+    gap: 22,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 4,
+  },
+  tab: {
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -1,
+  },
+  tabActive: {
+    borderBottomColor: colors.textPrimary,
+  },
+  tabTxt: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  tabTxtActive: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+  },
+
+  // Defter satırı — kart yok, hairline border-bottom
+  ledgerRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 14,
+  },
+  ledgerMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 8,
   },
-  sliderLabel: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
-
-  emptyAttention: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+  ledgerName: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 3,
   },
-  emptyTitle: { color: colors.textPrimary, fontWeight: '800', fontSize: 16 },
-  emptySub: { color: colors.textMuted, fontSize: 12, marginTop: 4, textAlign: 'center' },
-
-  attentionList: { gap: 8 },
-
-  // Yaklaşan Taksitler satırı — chunky yuvarlak, sol accent kalın
-  upcomingRow: {
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderRadius: 18,
-    padding: 14,
-    gap: spacing.sm,
+  ledgerMeta: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
   },
-  upcomingTop: {
+  ledgerRight: {
+    alignItems: 'flex-end',
+  },
+  ledgerAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  waLink: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  expanded: {
+    marginTop: 10,
+    paddingLeft: 4,
+  },
+  instList: { gap: 6, marginBottom: 8 },
+  instItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingVertical: 4,
   },
-  // Sol accent border zaten durumu gösterdiği için dot'a gerek kalmadı ama halen destekli.
-  upcomingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  upcomingName: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  upcomingMeta: { fontSize: 12, fontWeight: '600', marginTop: 3 },
-  upcomingAmountWrap: { alignItems: 'flex-end', paddingTop: 28 },
-  upcomingAmountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 },
-  upcomingAmountVal: { fontSize: 16, fontWeight: '900', color: colors.gold },
-  upcomingExpandHint: { fontSize: 10, color: colors.textMuted, fontWeight: '700', marginTop: 3 },
-
-  // Genişletilmiş taksit listesi (detay)
-  expandedList: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 6,
-  },
-  expandedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    gap: spacing.sm,
-  },
-  expandedItemNo: {
+  instNo: {
     color: colors.gold,
-    fontWeight: '900',
-    fontSize: 12,
-    width: 20,
-  },
-  expandedItemDate: { color: colors.textPrimary, fontWeight: '700', fontSize: 12 },
-  expandedItemStatus: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  expandedItemAmount: { color: colors.gold, fontWeight: '800', fontSize: 13 },
-  openCustomerBtn: {
-    alignSelf: 'flex-end',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginTop: 2,
-  },
-  openCustomerTxt: { color: colors.gold, fontSize: 12, fontWeight: '700' },
-  waBtn: {
-    borderRadius: radii.md,
-    paddingVertical: 12,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#25D366',
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  waBtnTxt: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-    fontSize: 12,
-    letterSpacing: 1.6,
-  },
-
-  // Split (kız/erkek) — 2 WP butonu yan yana + side badge
-  splitWaRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  sideBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sideBadgeTxt: {
-    color: colors.primaryDeep,
-    fontWeight: '900',
+    fontWeight: '800',
     fontSize: 11,
+    width: 24,
+    textAlign: 'left',
+  },
+  instDate: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
+  instStatus: { fontSize: 11, marginTop: 1 },
+  instAmount: { color: colors.gold, fontSize: 12, fontWeight: '800' },
+  openLink: { color: colors.gold, fontSize: 12, fontWeight: '700', paddingVertical: 4 },
+
+  // Boş satır
+  emptyRow: {
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  emptyTitle: { color: colors.textSecondary, fontSize: 14, fontWeight: '700' },
+  emptySub: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
+
+  // Bölüm başlığı
+  sectionSpacer: { height: 30 },
+  sectionTitle: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '800',
+    letterSpacing: 2,
+    marginBottom: 10,
   },
 
-  // Mobil swipe paneli — emojisiz, sade kırmızı "SİL"
-  swipeAction: {
-    backgroundColor: colors.danger,
-    justifyContent: 'center',
+  dropRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: 88,
-    borderRadius: radii.md,
-    marginLeft: 6,
+    gap: 12,
+    marginBottom: 4,
   },
-  swipeActionTxt: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-    fontSize: 13,
-    letterSpacing: 3,
-  },
+  dropLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
 
-  // Masaüstü × dismiss butonu — sağ üst köşede, sade, içeriğe binmez
-  dismissibleWrap: {
-    position: 'relative',
+  actionLabel: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 3,
   },
+  actionChev: { color: colors.textMuted, fontSize: 22, marginLeft: 12 },
+
+  // Swipe / × dismiss — mevcut işlev korunuyor
+  dismissibleWrap: { position: 'relative' },
   dismissBtn: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: 10,
+    right: 0,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -859,74 +791,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     lineHeight: 16,
   },
-
-  attentionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.warning,
-    borderRadius: 18,
-    // paddingTop artırıldı → × butonu (top:6, height:22 → y=6→28) içerikle çakışmasın
-    paddingHorizontal: spacing.md,
-    paddingTop: 30,
-    paddingBottom: spacing.md,
-    // sağda × butonuna nefes → WP butonu iç içe girmesin
-    paddingRight: 34,
-    gap: 10,
-  },
-  attentionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.warning,
-  },
-  attentionMain: { flex: 1 },
-  attentionName: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  attentionMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  attentionAmount: { alignItems: 'flex-end' },
-  attentionAmountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 },
-  attentionAmountVal: { fontSize: 14, fontWeight: '800', color: colors.danger, marginTop: 2 },
-
-  // Sağdaki kompakt WhatsApp butonu — chevron'un yerini aldı
-  attentionWaBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
+  swipeAction: {
+    backgroundColor: colors.danger,
     justifyContent: 'center',
-    overflow: 'hidden',
-    marginLeft: 6,
-    shadowColor: '#25D366',
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
-    elevation: 3,
+    alignItems: 'center',
+    width: 88,
   },
-  attentionWaBtnTxt: {
+  swipeActionTxt: {
     color: '#FFFFFF',
     fontWeight: '900',
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 13,
+    letterSpacing: 3,
   },
-
-  actionsGrid: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' },
-  actionCard: {
-    flex: 1,
-    minWidth: 200,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: 18,
-    padding: spacing.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderLeftWidth: 4,
-    borderColor: colors.border,
-  },
-  actionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-  actionDesc: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
-  actionChev: { color: colors.textMuted, fontSize: 22, marginLeft: 12 },
 });
