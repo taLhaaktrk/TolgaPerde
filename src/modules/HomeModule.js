@@ -252,19 +252,36 @@ export default function HomeModule() {
   );
 }
 
+// Hex rengi rgba tint'e çevir. accent '#RRGGBB' varsayımı.
+function tintOf(hex, alpha = 0.14) {
+  if (!hex || hex.length < 7) return `rgba(255,255,255,${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function StatCard({ label, value, accent, isPhone }) {
+  const tintBg = tintOf(accent, 0.13);
   return (
-    <View style={[styles.statCard, isPhone && styles.statCardPhone, { borderLeftColor: accent }]}>
+    <View style={[
+      styles.statCard,
+      isPhone && styles.statCardPhone,
+      { backgroundColor: tintBg, borderColor: tintOf(accent, 0.25) },
+    ]}>
       {isPhone ? (
         <View style={styles.statRowPhone}>
-          <Text style={styles.statLabelPhone}>{label}</Text>
-          <Text style={styles.statValuePhone} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statLabelPhone, { color: accent }]}>{label}</Text>
+          </View>
+          <Text style={[styles.statValuePhone, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
             {value}
           </Text>
         </View>
       ) : (
         <>
-          <Text style={styles.statLabel}>{label}</Text>
+          <View style={[styles.statDot, { backgroundColor: accent }]} />
+          <Text style={[styles.statLabel, { color: accent }]}>{label}</Text>
           <Text style={styles.statValue}>{value}</Text>
         </>
       )}
@@ -627,24 +644,28 @@ const styles = StyleSheet.create({
   statsRowPhone: { flexDirection: 'column', gap: spacing.sm },
   statCard: {
     flex: 1,
-    backgroundColor: colors.bgCard,
-    borderRadius: radii.lg,
+    borderRadius: 20,          // chunky
     padding: spacing.lg,
-    overflow: 'hidden',
+    paddingVertical: spacing.xl,
     borderWidth: 1,
-    borderColor: colors.border,
-    // Sol taraflı ince accent — renk StatCard'da dinamik verilir
-    borderLeftWidth: 3,
+    minHeight: 120,
   },
   statCardPhone: {
     flex: 0,
-    minHeight: 68,
-    paddingVertical: spacing.md,
+    minHeight: 78,
+    paddingVertical: 14,
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
+    borderRadius: 18,
   },
-  statValue: { fontSize: 26, fontWeight: '900', color: colors.textPrimary },
-  statLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '800', letterSpacing: 1.5, marginBottom: 6 },
+  statDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  statValue: { fontSize: 32, fontWeight: '900', color: colors.textPrimary, letterSpacing: -0.5 },
+  statLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8, textTransform: 'uppercase' },
   // Telefon: tek satırda solda label, sağda büyük değer
   statRowPhone: {
     flexDirection: 'row',
@@ -699,14 +720,14 @@ const styles = StyleSheet.create({
 
   attentionList: { gap: 8 },
 
-  // Yaklaşan Taksitler satırı
+  // Yaklaşan Taksitler satırı — chunky yuvarlak, sol accent kalın
   upcomingRow: {
     backgroundColor: colors.bgCard,
     borderWidth: 1,
     borderColor: colors.border,
-    borderLeftWidth: 3,
-    borderRadius: radii.md,
-    padding: spacing.md,
+    borderLeftWidth: 4,
+    borderRadius: 18,
+    padding: 14,
     gap: spacing.sm,
   },
   upcomingTop: {
@@ -845,9 +866,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgCard,
     borderWidth: 1,
     borderColor: colors.border,
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
     borderLeftColor: colors.warning,
-    borderRadius: radii.md,
+    borderRadius: 18,
     // paddingTop artırıldı → × butonu (top:6, height:22 → y=6→28) içerikle çakışmasın
     paddingHorizontal: spacing.md,
     paddingTop: 30,
@@ -898,11 +919,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgCard,
-    borderRadius: radii.lg,
+    borderRadius: 18,
     padding: spacing.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
     borderColor: colors.border,
   },
   actionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },

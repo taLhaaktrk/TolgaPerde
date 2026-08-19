@@ -14,6 +14,7 @@ import NewCustomerModal from '../components/customers/NewCustomerModal';
 import useCustomers from '../hooks/useCustomers';
 import useDeviceType from '../hooks/useDeviceType';
 import { formatPhoneTR } from '../utils/format';
+import { getAvatarColor, getInitials } from '../utils/avatarColor';
 import { useAppShell } from '../context/AppShellContext';
 import { colors, gradients, spacing, radii, shadows } from '../theme/colors';
 
@@ -166,6 +167,22 @@ export default function CustomersModule() {
         />
       )}
 
+      {/* FAB — Yeni Müşteri hızlı ekleme (sağ alt) */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setModalMode('new')}
+        style={styles.fab}
+      >
+        <LinearGradient
+          colors={gradients.goldButton}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabInner}
+        >
+          <Text style={styles.fabPlus}>+</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+
       <NewCustomerModal
         visible={modalMode !== null}
         onClose={() => setModalMode(null)}
@@ -189,13 +206,35 @@ function CustomerRow({ customer, active, onPress }) {
   if (dateStr) metaParts.push(dateStr);
   if (noteStr) metaParts.push(noteStr);
 
+  // Durum pill badge — Aktif / Borçlu / Tamamlandı
+  const isActive = isActiveCustomer(customer);
+  const hasDebt = (customer.remainingAmount || 0) > 0;
+  const statusInfo = isActive
+    ? { txt: 'AKTİF', color: colors.success, bg: 'rgba(56,178,110,0.15)' }
+    : hasDebt
+    ? { txt: 'BORÇLU', color: colors.danger, bg: 'rgba(226,92,92,0.15)' }
+    : { txt: 'TAMAM', color: colors.textMuted, bg: 'rgba(255,255,255,0.06)' };
+
+  // Renkli avatar — isimden hash
+  const avColor = getAvatarColor(customer.fullName);
+
   return (
     <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={[styles.row, active && styles.rowActive]}>
-      <View style={[styles.avatar, active && styles.avatarActive]}>
-        <Text style={[styles.avatarTxt, active && { color: colors.primaryDeep }]}>{initials(customer.fullName)}</Text>
+      <View style={[
+        styles.avatar,
+        { backgroundColor: active ? colors.gold : avColor.bg, borderColor: active ? colors.gold : 'transparent' },
+      ]}>
+        <Text style={[styles.avatarTxt, { color: active ? colors.primaryDeep : avColor.text }]}>
+          {getInitials(customer.fullName)}
+        </Text>
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.name} numberOfLines={1}>{customer.fullName || '—'}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{customer.fullName || '—'}</Text>
+          <View style={[styles.statusPill, { backgroundColor: statusInfo.bg }]}>
+            <Text style={[styles.statusPillTxt, { color: statusInfo.color }]}>{statusInfo.txt}</Text>
+          </View>
+        </View>
         <Text style={styles.meta} numberOfLines={1}>
           {metaParts.join(' · ')}
         </Text>
@@ -330,11 +369,11 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 16,
   },
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: {
@@ -350,35 +389,76 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgCard,
-    borderRadius: radii.md,
-    padding: spacing.md,
+    borderRadius: 18,          // chunky
+    padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
   },
   rowActive: {
     borderColor: colors.gold,
-    backgroundColor: 'rgba(201,169,97,0.06)',
+    backgroundColor: 'rgba(201,169,97,0.08)',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 2,
   },
-  avatarActive: {
-    backgroundColor: colors.gold,
-    borderColor: colors.gold,
+  avatarTxt: { fontWeight: '900', fontSize: 15, letterSpacing: 0.3 },
+
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  avatarTxt: { color: colors.textSecondary, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
-  name: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  meta: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
-  amountCol: { alignItems: 'flex-end' },
-  amountLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '800', letterSpacing: 1.5 },
-  amountVal: { fontSize: 14, fontWeight: '800', color: colors.danger, marginTop: 3 },
+  name: { color: colors.textPrimary, fontWeight: '800', fontSize: 15, flexShrink: 1 },
+
+  // Chunky pill status (AKTİF / BORÇLU / TAMAM)
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  statusPillTxt: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  meta: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
+  amountCol: { alignItems: 'flex-end', marginLeft: 8 },
+  amountLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '900', letterSpacing: 1.5 },
+  amountVal: { fontSize: 15, fontWeight: '900', color: colors.danger, marginTop: 3 },
+
+  // FAB — Floating Action Button (sağ alt, yeni müşteri ekleme kısayolu)
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    shadowColor: colors.gold,
+    shadowOpacity: 0.5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  fabInner: {
+    flex: 1,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabPlus: {
+    color: colors.primaryDeep,
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 34,
+    marginTop: -2,
+  },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { padding: 40, alignItems: 'center' },
