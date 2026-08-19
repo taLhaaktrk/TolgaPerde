@@ -3,39 +3,25 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import ModuleHeader from '../components/shell/ModuleHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NewCustomerModal from '../components/customers/NewCustomerModal';
 import useCustomers from '../hooks/useCustomers';
-import useDeviceType from '../hooks/useDeviceType';
 import { formatPhoneTR } from '../utils/format';
-import { getAvatarColor, getInitials } from '../utils/avatarColor';
 import { useAppShell } from '../context/AppShellContext';
-import { colors, gradients, spacing, radii, shadows } from '../theme/colors';
+import { colors, gradients } from '../theme/colors';
 
 const formatTL = (n) =>
   (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₺';
 
-const sourceLabel = (s) => {
-  if (s === 'canvas') return 'Çizim';
-  if (s === 'photo_archive') return 'Foto';
-  return 'Manuel';
-};
-
-const initials = (name) => {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toLocaleUpperCase('tr');
-};
-
 const normalize = (s) => (s || '').toLocaleLowerCase('tr');
 
-// "Aktif müşteri" tanımı: sipariş tarihinden son 10 gün içinde — ActiveCustomerCard ile aynı
+// "Aktif müşteri" tanımı: sipariş tarihinden son 10 gün içinde
 const ACTIVE_CUSTOMER_DAYS = 10;
 const isActiveCustomer = (c) => {
   const order = c.orderDate?.toDate?.() || (c.orderDate instanceof Date ? c.orderDate : null);
@@ -47,9 +33,9 @@ const isActiveCustomer = (c) => {
 export default function CustomersModule() {
   const { customers, loading } = useCustomers(500);
   const { activeCustomer, setActiveCustomer } = useAppShell();
-  const { isPhone } = useDeviceType();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
-  const [modalMode, setModalMode] = useState(null); // 'new' | 'archive' | null
+  const [modalMode, setModalMode] = useState(null); // 'new' | null
   const [activeOnly, setActiveOnly] = useState(false);
 
   const activeCount = useMemo(() => customers.filter(isActiveCustomer).length, [customers]);
@@ -59,96 +45,81 @@ export default function CustomersModule() {
     let base = customers;
     if (activeOnly) base = base.filter(isActiveCustomer);
     if (q) base = base.filter((c) => normalize(c.fullName).includes(q));
-    // Tüm modlarda Türkçe alfabetik sıralama
     return [...base].sort((a, b) =>
       (a.fullName || '').localeCompare(b.fullName || '', 'tr', { sensitivity: 'base' })
     );
   }, [customers, query, activeOnly]);
 
-  const actionButtons = (
-    <View style={[styles.actionsRow, isPhone && styles.actionsRowPhone]}>
-      {/* Kayıt sayısı — sade bilgi pill */}
-      <View style={styles.countPill}>
-        <Text style={styles.countPillNum}>{loading ? '…' : filtered.length}</Text>
-        <Text style={styles.countPillTxt}>KAYIT</Text>
-      </View>
-
-      {/* Aktif müşteri filtresi — toggle */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setActiveOnly((v) => !v)}
-      >
-        <View style={[styles.activeBtn, activeOnly && styles.activeBtnOn]}>
-          <View style={[styles.activeDot, activeOnly && styles.activeDotOn]} />
-          <Text style={[styles.activeBtnTxt, activeOnly && styles.activeBtnTxtOn]}>
-            Aktif Müşteri
-          </Text>
-          {activeCount > 0 && (
-            <View style={[styles.activeCountBadge, activeOnly && styles.activeCountBadgeOn]}>
-              <Text style={[styles.activeCountTxt, !activeOnly && { color: colors.success }]}>{activeCount}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-
-      {/* + Müşteri Ekle — birincil aksiyon */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setModalMode('new')}
-        style={styles.addBtnWrap}
-      >
-        <LinearGradient
-          colors={gradients.goldButton}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.addBtn}
-        >
-          <Text style={styles.addBtnPlus}>+</Text>
-          <Text style={styles.addBtnTxt}>Müşteri Ekle</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
-  );
+  // Alfabetik gruplama — SectionList için
+  const sections = useMemo(() => {
+    const map = new Map();
+    for (const c of filtered) {
+      const first = (c.fullName || '').trim().charAt(0);
+      const letter = first ? first.toLocaleUpperCase('tr') : '#';
+      if (!map.has(letter)) map.set(letter, []);
+      map.get(letter).push(c);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], 'tr'))
+      .map(([title, data]) => ({ title, data }));
+  }, [filtered]);
 
   return (
     <View style={styles.flex}>
-      <ModuleHeader
-        eyebrow="MÜŞTERİ YÖNETİMİ"
-        title="Müşteriler"
-        right={!isPhone ? actionButtons : null}
-      />
+      {/* Üst — başlık + toggle chip */}
+      <View style={[styles.pageHead, { paddingTop: (insets.top || 12) + 14 }]}>
+        <Text style={styles.pageTitle}>Müşteriler</Text>
+        <TouchableOpacity activeOpacity={0.6} onPress={() => setActiveOnly((v) => !v)}>
+          <View style={[styles.headChip, activeOnly && styles.headChipOn]}>
+            <Text style={[styles.headChipTxt, activeOnly && styles.headChipTxtOn]}>
+              {activeOnly ? `Aktif ${activeCount}` : `${filtered.length} kayıt`}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
 
-      {/* Telefonda butonlar başlık altında ayrı satırda — flex-wrap ile 2 satıra düşer */}
-      {isPhone && <View style={styles.phoneActionsBar}>{actionButtons}</View>}
-
+      {/* Arama — sade underline */}
       <View style={styles.searchWrap}>
-        <View style={styles.searchBox}>
+        <View style={styles.searchRow}>
+          <Text style={styles.searchIcon}>○</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
             style={styles.searchInput}
-            placeholder="Müşteri adı ara…"
+            placeholder="Ara…"
             placeholderTextColor={colors.textMuted}
             autoCorrect={false}
             autoCapitalize="words"
           />
           {!!query && (
-            <TouchableOpacity onPress={() => setQuery('')}>
+            <TouchableOpacity onPress={() => setQuery('')} style={{ padding: 4 }}>
               <Text style={styles.searchClear}>✕</Text>
             </TouchableOpacity>
           )}
         </View>
       </View>
 
+      {/* Liste */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.gold} />
         </View>
       ) : (
-        <FlatList
-          data={filtered}
+        <SectionList
+          sections={sections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.groupLetter}>{section.title}</Text>
+          )}
+          renderItem={({ item }) => (
+            <CustomerRow
+              customer={item}
+              active={activeCustomer?.id === item.id}
+              onPress={() => setActiveCustomer(item)}
+            />
+          )}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>Eşleşme yok</Text>
@@ -157,43 +128,33 @@ export default function CustomersModule() {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <CustomerRow
-              customer={item}
-              active={activeCustomer?.id === item.id}
-              onPress={() => setActiveCustomer(item)}
-            />
-          )}
         />
       )}
 
-      {/* FAB — Yeni Müşteri hızlı ekleme (sağ alt) */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => setModalMode('new')}
-        style={styles.fab}
-      >
-        <LinearGradient
-          colors={gradients.goldButton}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fabInner}
-        >
-          <Text style={styles.fabPlus}>+</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+      {/* Alt sabit — Müşteri Ekle */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setModalMode('new')}>
+          <LinearGradient
+            colors={gradients.goldButton}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.addBtn}
+          >
+            <Text style={styles.addBtnTxt}>+ Müşteri Ekle</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
       <NewCustomerModal
         visible={modalMode !== null}
         onClose={() => setModalMode(null)}
-        onSaved={() => { /* useCustomers stream zaten yeni kayıt için tetikleniyor */ }}
+        onSaved={() => { /* useCustomers stream zaten tetikleniyor */ }}
       />
     </View>
   );
 }
 
 function CustomerRow({ customer, active, onPress }) {
-  // Meta satırı: telefon · sipariş tarihi · (varsa) not
   const phoneStr = customer.phone ? formatPhoneTR(customer.phone) : 'tel yok';
   const orderDate =
     customer.orderDate?.toDate?.() ||
@@ -206,258 +167,181 @@ function CustomerRow({ customer, active, onPress }) {
   if (dateStr) metaParts.push(dateStr);
   if (noteStr) metaParts.push(noteStr);
 
-  // Durum pill badge — Aktif / Borçlu / Tamamlandı
   const isActive = isActiveCustomer(customer);
   const hasDebt = (customer.remainingAmount || 0) > 0;
-  const statusInfo = isActive
-    ? { txt: 'AKTİF', color: colors.success, bg: 'rgba(56,178,110,0.15)' }
-    : hasDebt
-    ? { txt: 'BORÇLU', color: colors.danger, bg: 'rgba(226,92,92,0.15)' }
-    : { txt: 'TAMAM', color: colors.textMuted, bg: 'rgba(255,255,255,0.06)' };
-
-  // Renkli avatar — isimden hash
-  const avColor = getAvatarColor(customer.fullName);
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={[styles.row, active && styles.rowActive]}>
-      <View style={[
-        styles.avatar,
-        { backgroundColor: active ? colors.gold : avColor.bg, borderColor: active ? colors.gold : 'transparent' },
-      ]}>
-        <Text style={[styles.avatarTxt, { color: active ? colors.primaryDeep : avColor.text }]}>
-          {getInitials(customer.fullName)}
-        </Text>
-      </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
+    <TouchableOpacity
+      activeOpacity={0.6}
+      onPress={onPress}
+      style={[styles.row, active && styles.rowActive]}
+    >
+      <View style={{ flex: 1, paddingRight: 8 }}>
         <View style={styles.nameRow}>
+          {isActive && <View style={styles.activeDot} />}
           <Text style={styles.name} numberOfLines={1}>{customer.fullName || '—'}</Text>
-          <View style={[styles.statusPill, { backgroundColor: statusInfo.bg }]}>
-            <Text style={[styles.statusPillTxt, { color: statusInfo.color }]}>{statusInfo.txt}</Text>
-          </View>
         </View>
-        <Text style={styles.meta} numberOfLines={1}>
-          {metaParts.join(' · ')}
+        <Text style={styles.meta} numberOfLines={1}>{metaParts.join(' · ')}</Text>
+      </View>
+      {hasDebt ? (
+        <Text style={styles.amountDebt} numberOfLines={1}>
+          {formatTL(customer.remainingAmount)}
         </Text>
-      </View>
-      <View style={styles.amountCol}>
-        <Text style={styles.amountLabel}>Kalan</Text>
-        <Text style={styles.amountVal}>{formatTL(customer.remainingAmount)}</Text>
-      </View>
+      ) : (
+        <Text style={styles.amountDone}>Tamam</Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  // Geniş ekran: yatay sıra, header'ın sağında
-  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // Telefon: flex-wrap ile gerekirse 2 satıra düşer, hepsi görünür
-  actionsRowPhone: {
-    flexWrap: 'wrap',
-    rowGap: 8,
-  },
-  // Telefonda header altındaki action satırı
-  phoneActionsBar: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: 0,
-  },
-  // Kayıt sayısı pill'i — sadece bilgi, en az prominent
-  countPill: {
+  flex: { flex: 1, backgroundColor: colors.bg },
+
+  // Sayfa başlığı
+  pageHead: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingBottom: 10,
+  },
+  pageTitle: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  headChip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
+    paddingVertical: 5,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    marginBottom: 5,
   },
-  countPillNum: {
-    color: colors.textPrimary,
-    fontWeight: '900',
-    fontSize: 13,
+  headChipOn: {
+    borderColor: colors.gold,
+    backgroundColor: 'rgba(201, 169, 97, 0.15)',
   },
-  countPillTxt: {
+  headChipTxt: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 0.5,
+  },
+  headChipTxtOn: {
+    color: colors.gold,
   },
 
-  // + Müşteri Ekle — birincil altın buton, gölgeli
-  addBtnWrap: {
-    shadowColor: colors.gold,
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  addBtn: {
+  // Search — sade underline
+  searchWrap: { paddingHorizontal: 22 },
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-  },
-  addBtnPlus: {
-    color: colors.primaryDeep,
-    fontWeight: '900',
-    fontSize: 16,
-    lineHeight: 18,
-  },
-  addBtnTxt: {
-    color: colors.primaryDeep,
-    fontWeight: '900',
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-
-  // Aktif Müşteri toggle butonu
-  activeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.success,
-    backgroundColor: 'transparent',
-  },
-  activeBtnOn: {
-    backgroundColor: colors.success,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success,
-  },
-  activeDotOn: {
-    backgroundColor: '#FFFFFF',
-  },
-  activeBtnTxt: {
-    color: colors.success,
-    fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
-  activeBtnTxtOn: {
-    color: '#FFFFFF',
-  },
-  activeCountBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    backgroundColor: 'rgba(56,178,110,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeCountBadgeOn: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  activeCountTxt: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  searchWrap: { padding: spacing.lg, paddingBottom: 0 },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-  },
-  searchIcon: { fontSize: 16, marginRight: 8 },
-  searchInput: {
-    flex: 1,
-    fontSize: 16, // iOS Safari 16px altı → auto-zoom bug'ı; 16+ olmalı
-    color: colors.textPrimary,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.10)',
     paddingVertical: 12,
   },
-  searchClear: { color: colors.textMuted, fontSize: 16, paddingHorizontal: 6 },
+  searchIcon: { color: colors.textMuted, fontSize: 16 },
+  searchInput: {
+    flex: 1,
+    fontSize: 16, // iOS Safari 16px altı → auto-zoom
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  searchClear: { color: colors.textMuted, fontSize: 14 },
 
-  listContent: { padding: spacing.lg, gap: spacing.sm },
+  // Liste
+  listContent: {
+    paddingHorizontal: 22,
+    paddingBottom: 110, // alt sabit bar için boşluk
+  },
+  groupLetter: {
+    color: colors.gold,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginTop: 18,
+    marginBottom: 6,
+  },
+
+  // Defter satırı
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgCard,
-    borderRadius: 18,          // chunky
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 14,
+    paddingLeft: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
   },
   rowActive: {
-    borderColor: colors.gold,
-    backgroundColor: 'rgba(201,169,97,0.08)',
+    backgroundColor: 'rgba(201, 169, 97, 0.08)',
+    borderLeftColor: colors.gold,
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
-  avatarTxt: { fontWeight: '900', fontSize: 15, letterSpacing: 0.3 },
-
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 4,
   },
-  name: { color: colors.textPrimary, fontWeight: '800', fontSize: 15, flexShrink: 1 },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.success,
+  },
+  name: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  meta: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  amountDebt: {
+    color: colors.danger,
+    fontSize: 16,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+  amountDone: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
 
-  // Chunky pill status (AKTİF / BORÇLU / TAMAM)
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+  // Alt sabit bar
+  bottomBar: {
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.bg,
   },
-  statusPillTxt: {
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-
-  meta: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  amountCol: { alignItems: 'flex-end', marginLeft: 8 },
-  amountLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '900', letterSpacing: 1.5 },
-  amountVal: { fontSize: 15, fontWeight: '900', color: colors.danger, marginTop: 3 },
-
-  // FAB — Floating Action Button (sağ alt, yeni müşteri ekleme kısayolu)
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    shadowColor: colors.gold,
-    shadowOpacity: 0.5,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  fabInner: {
-    flex: 1,
-    borderRadius: 30,
+  addBtn: {
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.gold,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 4,
   },
-  fabPlus: {
+  addBtnTxt: {
     color: colors.primaryDeep,
-    fontSize: 32,
+    fontSize: 16,
     fontWeight: '900',
-    lineHeight: 34,
-    marginTop: -2,
+    letterSpacing: 0.5,
   },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
