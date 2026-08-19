@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import useVersionCheck from '../hooks/useVersionCheck';
 import { useAuth } from '../context/AuthContext';
 import { restoreAllReminders } from '../services/customerService';
+import { createTestCustomers, deleteTestCustomers } from '../services/testDataService';
 import Alert from '../utils/alert';
 import { colors } from '../theme/colors';
 
@@ -12,10 +13,73 @@ export default function SettingsModule() {
   const versionInfo = useVersionCheck();
   const insets = useSafeAreaInsets();
   const [restoring, setRestoring] = useState(false);
+  const [testBusy, setTestBusy] = useState(null); // 'create' | 'delete' | null
   const updateAvailable =
     versionInfo.latestVersion &&
     versionInfo.bundledVersion &&
     versionInfo.latestVersion !== versionInfo.bundledVersion;
+
+  const handleCreateTests = () => {
+    Alert.alert(
+      'Test Müşterileri Oluşturulsun mu?',
+      '6 test müşterisi eklenecek (TEST1..TEST6). Hepsi telefon 05511009340. Yaklaşan Taksitler ve Hatırlatma listelerinde farklı senaryolarda görüneceklerdir.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Ekle',
+          style: 'default',
+          onPress: async () => {
+            setTestBusy('create');
+            try {
+              const result = await createTestCustomers();
+              Alert.alert(
+                'Tamam',
+                `${result.created} test müşterisi eklendi. Ana Sayfa'ya git, Yaklaşan Taksitler ve Hatırlatma listelerini kontrol et.`,
+                [{ text: 'Tamam' }]
+              );
+            } catch (e) {
+              Alert.alert('Hata', e?.message || 'Test müşterileri eklenemedi.', [{ text: 'Tamam' }], { tone: 'danger' });
+            } finally {
+              setTestBusy(null);
+            }
+          },
+        },
+      ],
+      { tone: 'warning' }
+    );
+  };
+
+  const handleDeleteTests = () => {
+    Alert.alert(
+      'Test Müşterileri Silinsin mi?',
+      'Adı "TEST" ile başlayan tüm müşteriler kalıcı olarak silinir. Gerçek müşteriler etkilenmez.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Evet, sil',
+          style: 'destructive',
+          onPress: async () => {
+            setTestBusy('delete');
+            try {
+              const result = await deleteTestCustomers();
+              Alert.alert(
+                'Tamam',
+                result.deleted > 0
+                  ? `${result.deleted} test müşterisi silindi.`
+                  : 'Test müşterisi bulunamadı.',
+                [{ text: 'Tamam' }]
+              );
+            } catch (e) {
+              Alert.alert('Hata', e?.message || 'Silme başarısız.', [{ text: 'Tamam' }], { tone: 'danger' });
+            } finally {
+              setTestBusy(null);
+            }
+          },
+        },
+      ],
+      { tone: 'danger' }
+    );
+  };
 
   const handleRestoreReminders = () => {
     Alert.alert(
@@ -133,6 +197,33 @@ export default function SettingsModule() {
           </TouchableOpacity>
           <Text style={styles.hint}>
             Yaklaşan Taksitler ve Hatırlatma listesinden gizlediğin tüm satırlar geri gelir. Müşteri veya ödeme silinmez.
+          </Text>
+
+          {/* Test müşterileri — geliştirme/senaryo test'i için */}
+          <View style={styles.sectionSpacer} />
+          <SectionHeader title="TEST" subtitle="senaryo testi için sahte müşteriler" />
+          <TouchableOpacity
+            onPress={handleCreateTests}
+            activeOpacity={0.7}
+            style={styles.testCreateBtn}
+            disabled={testBusy !== null}
+          >
+            <Text style={styles.testCreateTxt}>
+              {testBusy === 'create' ? '⏳ Ekleniyor…' : '➕ Test Müşterileri Ekle (TEST1..TEST6)'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleDeleteTests}
+            activeOpacity={0.7}
+            style={styles.testDeleteBtn}
+            disabled={testBusy !== null}
+          >
+            <Text style={styles.testDeleteTxt}>
+              {testBusy === 'delete' ? '⏳ Siliniyor…' : '🗑 Test Müşterilerini Sil'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.hint}>
+            6 test müşterisi eklenir (hepsinin telefonu 05511009340). Yaklaşan Taksitler'de TEST1/2/3 (3 kademe ton), Hatırlatma'da TEST4/5/6 (Senaryo 2 ve 3) görünür.
           </Text>
         </View>
       </ScrollView>
@@ -263,6 +354,36 @@ const styles = StyleSheet.create({
   },
   restoreTxt: {
     color: colors.success,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+
+  testCreateBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(201,169,97,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,169,97,0.40)',
+    marginBottom: 8,
+  },
+  testCreateTxt: {
+    color: colors.gold,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  testDeleteBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(226,92,92,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(226,92,92,0.40)',
+  },
+  testDeleteTxt: {
+    color: colors.danger,
     fontWeight: '900',
     fontSize: 13,
     letterSpacing: 0.5,
