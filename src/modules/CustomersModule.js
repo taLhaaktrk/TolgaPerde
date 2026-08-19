@@ -66,20 +66,20 @@ export default function CustomersModule() {
 
   return (
     <View style={styles.flex}>
-      {/* Üst — başlık + toggle chip */}
-      <View style={[styles.pageHead, { paddingTop: (insets.top || 12) + 14 }]}>
-        <Text style={styles.pageTitle}>Müşteriler</Text>
-        <TouchableOpacity activeOpacity={0.6} onPress={() => setActiveOnly((v) => !v)}>
-          <View style={[styles.headChip, activeOnly && styles.headChipOn]}>
-            <Text style={[styles.headChipTxt, activeOnly && styles.headChipTxtOn]}>
-              {activeOnly ? `Aktif ${activeCount}` : `${filtered.length} kayıt`}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+      {/* Üst başlık paneli — hafif bordo tint + altın hairline (Ana Sayfa ile tutarlı) */}
+      <View style={[styles.heroBlock, { paddingTop: (insets.top || 12) + 14 }]}>
+        <View style={styles.pageHead}>
+          <Text style={styles.pageTitle}>Müşteriler</Text>
+          <TouchableOpacity activeOpacity={0.6} onPress={() => setActiveOnly((v) => !v)}>
+            <View style={[styles.headChip, activeOnly && styles.headChipOn]}>
+              <Text style={[styles.headChipTxt, activeOnly && styles.headChipTxtOn]}>
+                {activeOnly ? `Aktif ${activeCount}` : `${filtered.length} kayıt`}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
-      {/* Arama — sade underline */}
-      <View style={styles.searchWrap}>
+        {/* Arama — panel içinde, sade underline */}
         <View style={styles.searchRow}>
           <Text style={styles.searchIcon}>○</Text>
           <TextInput
@@ -197,13 +197,21 @@ function CustomerRow({ customer, active, onPress }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
 
+  // Üst başlık paneli — Ana Sayfa hero ile aynı ruh
+  heroBlock: {
+    paddingHorizontal: 22,
+    paddingBottom: 4,
+    backgroundColor: 'rgba(92, 13, 20, 0.22)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.35)',
+  },
+
   // Sayfa başlığı
   pageHead: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
   pageTitle: {
     color: colors.textPrimary,
@@ -234,15 +242,12 @@ const styles = StyleSheet.create({
     color: colors.gold,
   },
 
-  // Search — sade underline
-  searchWrap: { paddingHorizontal: 22 },
+  // Search — panel içinde sade satır (alt hairline paneldeki altın çizgi zaten var)
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.10)',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   searchIcon: { color: colors.textMuted, fontSize: 16 },
   searchInput: {
