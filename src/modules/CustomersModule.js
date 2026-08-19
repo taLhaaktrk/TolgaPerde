@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   pageTitle: {
-    color: colors.textPrimary,
+    color: colors.gold,
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: -0.5,
@@ -224,22 +224,22 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: 'rgba(201, 169, 97, 0.40)',
+    backgroundColor: 'rgba(201, 169, 97, 0.12)',
     marginBottom: 5,
   },
   headChipOn: {
     borderColor: colors.gold,
-    backgroundColor: 'rgba(201, 169, 97, 0.15)',
+    backgroundColor: 'rgba(201, 169, 97, 0.28)',
   },
   headChipTxt: {
-    color: colors.textMuted,
+    color: colors.gold,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   headChipTxtOn: {
-    color: colors.gold,
+    color: colors.goldLight,
   },
 
   // Search — panel içinde sade satır (alt hairline paneldeki altın çizgi zaten var)
@@ -249,14 +249,14 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
   },
-  searchIcon: { color: colors.textMuted, fontSize: 16 },
+  searchIcon: { color: colors.gold, fontSize: 16, fontWeight: '700' },
   searchInput: {
     flex: 1,
     fontSize: 16, // iOS Safari 16px altı → auto-zoom
     color: colors.textPrimary,
     padding: 0,
   },
-  searchClear: { color: colors.textMuted, fontSize: 14 },
+  searchClear: { color: colors.gold, fontSize: 14, fontWeight: '700' },
 
   // Liste
   listContent: {
