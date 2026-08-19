@@ -5,9 +5,11 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import {
   ref as storageRef,
@@ -532,6 +534,46 @@ export async function dismissAttentionReminder(customerId) {
     attentionDismissedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+}
+
+// 🔁 Tüm müşterilerin gizlenmiş hatırlatmalarını sıfırla —
+// dismissedInstallmentIds boşaltılır + attentionDismissed=false yapılır.
+// Sadece yanlışlıkla silinen hatırlatmaları geri getirir; müşteri/ödeme verisine dokunulmaz.
+export async function restoreAllReminders() {
+  const snap = await getDocs(collection(db, 'customers'));
+  if (snap.empty) return { updated: 0 };
+
+  // Yalnızca gerçekten "silinmiş" olan doc'ları güncelle — gereksiz yazma yapma.
+  const targets = [];
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    const hasDismissedIds = Array.isArray(data.dismissedInstallmentIds) && data.dismissedInstallmentIds.length > 0;
+    const isAttentionDismissed = data.attentionDismissed === true;
+    if (hasDismissedIds || isAttentionDismissed) {
+      targets.push(d.ref);
+    }
+  });
+
+  if (targets.length === 0) return { updated: 0 };
+
+  // Firestore batch limiti 500 — chunk'la
+  const CHUNK = 400;
+  let updated = 0;
+  for (let i = 0; i < targets.length; i += CHUNK) {
+    const chunk = targets.slice(i, i + CHUNK);
+    const batch = writeBatch(db);
+    for (const ref of chunk) {
+      batch.update(ref, {
+        dismissedInstallmentIds: [],
+        attentionDismissed: false,
+        attentionDismissedAt: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    updated += chunk.length;
+  }
+  return { updated };
 }
 
 export async function saveWithMedia({ customer, source, localUri, contentType, extras }) {

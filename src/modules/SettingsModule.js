@@ -1,18 +1,58 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import useVersionCheck from '../hooks/useVersionCheck';
 import { useAuth } from '../context/AuthContext';
+import { restoreAllReminders } from '../services/customerService';
+import Alert from '../utils/alert';
 import { colors } from '../theme/colors';
 
 export default function SettingsModule() {
   const { user } = useAuth();
   const versionInfo = useVersionCheck();
   const insets = useSafeAreaInsets();
+  const [restoring, setRestoring] = useState(false);
   const updateAvailable =
     versionInfo.latestVersion &&
     versionInfo.bundledVersion &&
     versionInfo.latestVersion !== versionInfo.bundledVersion;
+
+  const handleRestoreReminders = () => {
+    Alert.alert(
+      'Silinen Hatırlatmalar Geri Gelsin mi?',
+      'Yaklaşan Taksitler ve Hatırlatma listelerinden gizlediğin tüm müşteriler ve taksitler geri gelecek. Müşteri veya ödeme silinmez.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Evet, geri yükle',
+          style: 'default',
+          onPress: async () => {
+            setRestoring(true);
+            try {
+              const result = await restoreAllReminders();
+              Alert.alert(
+                'Tamam',
+                result.updated > 0
+                  ? `${result.updated} müşterinin gizlenmiş hatırlatması geri getirildi.`
+                  : 'Gizlenmiş hatırlatma bulunamadı — zaten temiz.',
+                [{ text: 'Tamam' }]
+              );
+            } catch (e) {
+              Alert.alert(
+                'Hata',
+                e?.message || 'Hatırlatmalar geri yüklenemedi.',
+                [{ text: 'Tamam' }],
+                { tone: 'danger' }
+              );
+            } finally {
+              setRestoring(false);
+            }
+          },
+        },
+      ],
+      { tone: 'warning' }
+    );
+  };
 
   return (
     <View style={styles.flex}>
@@ -77,6 +117,23 @@ export default function SettingsModule() {
               : 'Android'
             }
           />
+
+          {/* Hatırlatmalar */}
+          <View style={styles.sectionSpacer} />
+          <SectionHeader title="HATIRLATMALAR" subtitle="yanlışlıkla gizlediğin geri gelsin" />
+          <TouchableOpacity
+            onPress={handleRestoreReminders}
+            activeOpacity={0.7}
+            style={styles.restoreBtn}
+            disabled={restoring}
+          >
+            <Text style={styles.restoreTxt}>
+              {restoring ? '⏳ Geri yükleniyor…' : '↩ Silinen Hatırlatmaları Geri Yükle'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.hint}>
+            Yaklaşan Taksitler ve Hatırlatma listesinden gizlediğin tüm satırlar geri gelir. Müşteri veya ödeme silinmez.
+          </Text>
         </View>
       </ScrollView>
     </View>
@@ -191,6 +248,21 @@ const styles = StyleSheet.create({
   },
   reloadTxt: {
     color: colors.gold,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  restoreBtn: {
+    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(91, 168, 90, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(91, 168, 90, 0.40)',
+  },
+  restoreTxt: {
+    color: colors.success,
     fontWeight: '900',
     fontSize: 13,
     letterSpacing: 0.5,
