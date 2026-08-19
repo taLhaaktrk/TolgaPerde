@@ -637,9 +637,9 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 18,
     marginBottom: 24,
-    backgroundColor: 'rgba(92, 13, 20, 0.12)',
+    backgroundColor: 'rgba(92, 13, 20, 0.22)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201, 169, 97, 0.22)',
+    borderBottomColor: 'rgba(201, 169, 97, 0.35)',
   },
 
   // Üst blok — defter başlık
