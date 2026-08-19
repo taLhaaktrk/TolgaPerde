@@ -206,30 +206,32 @@ export default function HomeModule() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: (insets.top || 12) + 16 }]}
       >
-        {/* Üst başlık — defter stili */}
-        <Text style={styles.dateHeader}>{todayHeader()}</Text>
-        <Text
-          style={styles.bigTotal}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.5}
-        >
-          {loading ? '…' : formatTL(stats.totalDebt)}
-        </Text>
-        <Text style={styles.bigSub}>
-          toplam alacak · {stats.debtorCount} borçlu müşteri
-        </Text>
-
-        {/* Progress bar */}
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${filledPct}%` }]} />
-        </View>
-        <View style={styles.progressMeta}>
-          <Text style={styles.progressLeft}>
-            <Text style={{ color: colors.success, fontWeight: '700' }}>%{stats.pct} tahsil</Text>
-            {'  ·  '}{formatShort(stats.paid)}
+        {/* Üst başlık paneli — hafif bordo tint + altın hairline */}
+        <View style={styles.heroBlock}>
+          <Text style={styles.dateHeader}>{todayHeader()}</Text>
+          <Text
+            style={styles.bigTotal}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {loading ? '…' : formatTL(stats.totalDebt)}
           </Text>
-          <Text style={styles.progressRight}>{formatShort(stats.totalDebt)} bekliyor</Text>
+          <Text style={styles.bigSub}>
+            toplam alacak · {stats.debtorCount} borçlu müşteri
+          </Text>
+
+          {/* Progress bar */}
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${filledPct}%` }]} />
+          </View>
+          <View style={styles.progressMeta}>
+            <Text style={styles.progressLeft}>
+              <Text style={{ color: colors.success, fontWeight: '700' }}>%{stats.pct} tahsil</Text>
+              {'  ·  '}{formatShort(stats.paid)}
+            </Text>
+            <Text style={styles.progressRight}>{formatShort(stats.totalDebt)} bekliyor</Text>
+          </View>
         </View>
 
         {/* Bölüm başlığı — Taksitler */}
@@ -628,6 +630,18 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  // Üst blok paneli — bordo pastel tint + altın hairline (kart değil, defter içinde bir "başlık paneli")
+  heroBlock: {
+    marginHorizontal: -22,
+    paddingHorizontal: 22,
+    paddingTop: 4,
+    paddingBottom: 18,
+    marginBottom: 24,
+    backgroundColor: 'rgba(92, 13, 20, 0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(201, 169, 97, 0.22)',
+  },
+
   // Üst blok — defter başlık
   dateHeader: {
     color: colors.gold,
@@ -647,7 +661,7 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 18,
+    marginBottom: 14,
   },
 
   // Progress bar
@@ -666,7 +680,6 @@ const styles = StyleSheet.create({
   progressMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 22,
   },
   progressLeft: { fontSize: 12, color: colors.textMuted },
   progressRight: { fontSize: 12, color: colors.textMuted },
