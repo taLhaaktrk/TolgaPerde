@@ -241,16 +241,18 @@ export default function HomeModule() {
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${filledPct}%` }]} />
           </View>
+          {/* Alt satırlar TAM rakam — kompakt yuvarlaması matematik tutarsızlık yaratmasın
+              (ör. 1.047.300 → "1.0 Mn" olarak yuvarlanınca kullanıcı toplayınca uymuyor) */}
           <View style={styles.progressMeta}>
-            <Text style={styles.progressLeft}>
+            <Text style={styles.metaLine}>
               <Text style={{ color: colors.success, fontWeight: '800' }}>
-                {formatShort(stats.paid)} tahsil
+                {formatTL(stats.paid)} tahsil
               </Text>
               <Text style={{ color: colors.textMuted }}> (%{stats.pct})</Text>
             </Text>
-            <Text style={styles.progressRight}>
+            <Text style={styles.metaLine}>
               <Text style={{ color: colors.danger, fontWeight: '800' }}>
-                {formatShort(stats.totalDebt)}
+                {formatTL(stats.totalDebt)}
               </Text>
               <Text style={{ color: colors.textMuted }}> bekliyor</Text>
             </Text>
@@ -737,11 +739,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   progressMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 4,
   },
-  progressLeft: { fontSize: 12, color: colors.textMuted },
-  progressRight: { fontSize: 12, color: colors.textMuted },
+  metaLine: { fontSize: 13, color: colors.textMuted },
+  // (eski progressLeft/progressRight kaldırıldı — artık alt alta iki tam-sayı satır)
 
   // Sekmeler
   tabs: {
