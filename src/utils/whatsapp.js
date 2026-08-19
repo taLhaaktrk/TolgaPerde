@@ -52,6 +52,17 @@ function formatDate(dueDate) {
   return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+// Gün sayısını "12 gün" / "X ay Y gün" formatına çevir.
+// < 30 → "12 gün"; >= 30 → "6 ay 11 gün" (kalan 0 ise sadece "X ay")
+export function formatOverdueDuration(days) {
+  const g = typeof days === 'number' && days > 0 ? Math.floor(days) : 0;
+  if (g < 30) return `${g} gün`;
+  const ay = Math.floor(g / 30);
+  const kalan = g % 30;
+  if (kalan === 0) return `${ay} ay`;
+  return `${ay} ay ${kalan} gün`;
+}
+
 // Hatırlatma mesaj şablonu — samimi & rahatlatıcı ton.
 // Opsiyonel parametreler: installmentNo, totalInstallments, remainingDebt, daysOverdue
 // daysOverdue >= 30 ise "uzun gecikme" varyantı kullanılır (daha kibar ton).
@@ -101,29 +112,107 @@ export function buildReminderMessage({
   return `${opening}${kalanSatiri}${ibanBlogu}${closing}`;
 }
 
-// "Uzun süre iletişime geçilmemiş / son ödemeden çok geçmiş" müşteri mesajı.
-// Taksit bazlı DEĞİL — genel bakiye + geçen süre üzerine kurulur.
-// hasPayment=true  → "Son ödemenizin üzerinden X gün geçmiştir..."
-// hasPayment=false → "Siparişinizin üzerinden X gün geçti, henüz ödeme alınamadı..."
-export function buildStaleReminderMessage({
+// ═══════════════════════════════════════════════════════════════
+// SENARYO 1 — YENİ müşteri (2026-07-01+), Yaklaşan Taksitler'den WA
+// Her geciken taksit ayrı satır listelenir. 3 kademe ton (en eski
+// geciken taksitin gün sayısına göre otomatik değişir):
+//   0-30  → standart kibar
+//   31-60 → net ama saygılı ("sizi tekrar bilgilendirmek istedik")
+//   61+   → ciddi + "görüşmek/yapılandırma için bize ulaşın"
+// ═══════════════════════════════════════════════════════════════
+export function buildDetailedInstallmentMessage({
   customerName,
-  daysSince,
-  hasPayment,
+  overdueInstallments, // [{ installmentNo, tutar, dueDate, daysOverdue }]
   remainingDebt,
 }) {
   const ad = customerName || '';
-  const gun = typeof daysSince === 'number' && daysSince > 0 ? daysSince : 0;
+  const items = Array.isArray(overdueInstallments) ? overdueInstallments : [];
+  if (items.length === 0) return '';
+
+  // En eski geciken taksitin gün sayısı → ton kademesi
+  const maxDays = items.reduce((m, it) => Math.max(m, Number(it.daysOverdue) || 0), 0);
+
+  let opening, closing;
+  if (maxDays >= 61) {
+    // 3. kademe — son hatırlatma, ciddi ton
+    opening = `Sayın ${ad}, Tolga Perde olarak ödeme planınızla ilgili son bir hatırlatma yapmak istiyoruz. Aşağıdaki taksitleriniz uzun süredir beklemektedir:`;
+    closing = `\n\nBu konuda görüşmek veya ödeme planınızı yeniden yapılandırmak için bizimle iletişime geçebilirsiniz. Anlayışınız için teşekkür ederiz.`;
+  } else if (maxDays >= 31) {
+    // 2. kademe — net ama saygılı
+    opening = `Sayın ${ad}, Tolga Perde olarak sizi tekrar bilgilendirmek istedik. Aşağıdaki taksitlerinizin vadesi geçmiş, ödeme beklenmektedir:`;
+    closing = `\n\nÖdemeleriniz için anlayışınızı bekliyor, iyi günler dileriz.`;
+  } else {
+    // 1. kademe — standart kibar
+    opening = `Sayın ${ad}, Tolga Perde'mizi tercih ettiğiniz için teşekkür ederiz. Aşağıdaki taksitlerinizin vadesi geçmiş olup ödeme beklenmektedir:`;
+    closing = `\n\nAnlayışınız için teşekkür eder, iyi günler dileriz.`;
+  }
+
+  const list = items
+    .map((it) => {
+      const tarih = formatDate(it.dueDate);
+      const gecikme = formatOverdueDuration(it.daysOverdue);
+      const noStr = it.installmentNo ? `${it.installmentNo}. taksit — ` : '';
+      return `• ${noStr}${formatAmount(it.tutar)} TL — vade ${tarih} — ${gecikme} gecikme`;
+    })
+    .join('\n');
+
+  const totalOverdue = items.reduce((s, it) => s + (Number(it.tutar) || 0), 0);
+  const summary = `\n\nToplam geciken tutar: ${formatAmount(totalOverdue)} TL`;
+  const kalanSatiri =
+    typeof remainingDebt === 'number' && remainingDebt > 0
+      ? `\nKalan bakiyeniz: ${formatAmount(remainingDebt)} TL`
+      : '';
+
+  const iban = BUSINESS_IBAN ? `\n\nİşletme IBAN: ${BUSINESS_IBAN}` : '';
+
+  return `${opening}\n\n${list}${summary}${kalanSatiri}${iban}${closing}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SENARYO 2 & 3 — Hatırlatma (Uzun süre iletişimsiz) → ESKİ müşteri
+// Senaryo 2: aktif taksit planı VAR + geciken taksit sayısı belli
+//   → "{N} taksittir {gün} gündür ödeme yapmadınız"
+// Senaryo 3: taksit planı YOK ya da plan süresi AŞILMIŞ (son taksit vadesi geçti)
+//   → sadece süre: "{gün} ödeme yapmadınız" (taksit numaralamak anlamsız)
+// ═══════════════════════════════════════════════════════════════
+export function buildStaleReminderMessage({
+  customerName,
+  daysSince,               // Senaryo 3: son ödeme/sipariş üstünden gün
+  hasPayment,
+  remainingDebt,
+  overdueInstallmentCount, // Senaryo 2: geciken taksit sayısı
+  oldestOverdueDays,       // Senaryo 2: en eski geciken vadeden gün
+  planExceeded,            // true → Senaryo 3'e düş (plan süresi aşıldı)
+}) {
+  const ad = customerName || '';
+
+  // Senaryo 2 koşulu: geciken taksit sayısı > 0 VE plan süresi aşılmamış
+  const isScenario2 =
+    typeof overdueInstallmentCount === 'number' &&
+    overdueInstallmentCount > 0 &&
+    typeof oldestOverdueDays === 'number' &&
+    oldestOverdueDays > 0 &&
+    !planExceeded;
 
   let opening;
-  if (hasPayment) {
-    opening = `Sayın ${ad}, Tolga Perde olarak ödeme planınız hakkında bilgi vermek istedik. Son ödemenizin üzerinden ${gun} gün geçmiş olup ödeme planınıza gecikme olmuştur.`;
+  if (isScenario2) {
+    // Senaryo 2 — plan içi geciken taksit özeti
+    const durStr = formatOverdueDuration(oldestOverdueDays);
+    opening = `Sayın ${ad}, Tolga Perde olarak ödeme planınız hakkında bilgi vermek istedik. ${overdueInstallmentCount} taksittir ${durStr} ödeme yapmadınız.`;
   } else {
-    opening = `Sayın ${ad}, Tolga Perde olarak siparişiniz hakkında bilgi vermek istedik. Siparişinizin üzerinden ${gun} gün geçmiş olup henüz tarafımıza bir ödeme ulaşmamıştır.`;
+    // Senaryo 3 — sadece süre
+    const g = typeof daysSince === 'number' && daysSince > 0 ? daysSince : 0;
+    const durStr = formatOverdueDuration(g);
+    if (hasPayment) {
+      opening = `Sayın ${ad}, Tolga Perde olarak bilgi vermek istedik. Son ödemenizden bu yana ${durStr} ödeme yapmadınız.`;
+    } else {
+      opening = `Sayın ${ad}, Tolga Perde olarak siparişiniz hakkında bilgi vermek istedik. Siparişinizin üzerinden ${durStr} geçmiş, henüz tarafımıza bir ödeme ulaşmamıştır.`;
+    }
   }
 
   const kalanSatiri =
     typeof remainingDebt === 'number' && remainingDebt > 0
-      ? ` Kalan toplam bakiyeniz: ${formatAmount(remainingDebt)} TL'dir.`
+      ? ` Kalan bakiyeniz: ${formatAmount(remainingDebt)} TL'dir.`
       : '';
 
   const ibanBlogu = BUSINESS_IBAN ? `\n\nİşletme IBAN: ${BUSINESS_IBAN}` : '';
@@ -133,7 +222,8 @@ export function buildStaleReminderMessage({
 }
 
 /**
- * Stale reminder — müşteri kartı & Hatırlatma bölümündeki buton için.
+ * Stale reminder — Hatırlatma listesi (ESKİ müşteriler). Senaryo 2 (plan
+ * içi geciken taksit özeti) veya Senaryo 3 (sadece süre).
  * @returns {Promise<{ok: boolean, reason?: string}>}
  */
 export async function sendStaleReminder({
@@ -142,6 +232,9 @@ export async function sendStaleReminder({
   daysSince,
   hasPayment,
   remainingDebt,
+  overdueInstallmentCount,
+  oldestOverdueDays,
+  planExceeded,
 }) {
   const normalized = normalizePhoneTR(phone);
   if (!normalized) {
@@ -151,6 +244,45 @@ export async function sendStaleReminder({
     customerName,
     daysSince,
     hasPayment,
+    remainingDebt,
+    overdueInstallmentCount,
+    oldestOverdueDays,
+    planExceeded,
+  });
+  const url = `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') window.open(url, '_blank');
+    } else {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) return { ok: false, reason: 'WhatsApp bu cihazda açılamıyor.' };
+      await Linking.openURL(url);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e?.message || 'Bilinmeyen hata' };
+  }
+}
+
+/**
+ * Detaylı taksit hatırlatması — Yaklaşan Taksitler listesi (YENİ müşteriler).
+ * Tüm geciken taksitleri liste halinde yollar + 3 kademe ton eskalasyonu.
+ * @returns {Promise<{ok: boolean, reason?: string}>}
+ */
+export async function sendDetailedInstallmentReminder({
+  customerName,
+  phone,
+  overdueInstallments,
+  remainingDebt,
+}) {
+  const normalized = normalizePhoneTR(phone);
+  if (!normalized) {
+    return { ok: false, reason: 'Geçersiz telefon — uluslararası formata çevrilemedi.' };
+  }
+  const message = buildDetailedInstallmentMessage({
+    customerName,
+    overdueInstallments,
     remainingDebt,
   });
   const url = `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;

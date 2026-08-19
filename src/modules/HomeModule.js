@@ -8,7 +8,7 @@ import useCustomers from '../hooks/useCustomers';
 import useDeviceType from '../hooks/useDeviceType';
 import { useAppShell, MODULE_CUSTOMERS } from '../context/AppShellContext';
 import { getInstallmentStatus } from '../utils/installments';
-import { sendWhatsAppReminder, sendStaleReminder } from '../utils/whatsapp';
+import { sendDetailedInstallmentReminder, sendStaleReminder } from '../utils/whatsapp';
 import {
   dismissInstallmentReminder,
   dismissAttentionReminder,
@@ -51,6 +51,11 @@ const startOfToday = () => {
   t.setHours(0, 0, 0, 0);
   return t.getTime();
 };
+
+// 📅 YENİ vs ESKİ müşteri sınırı — bu tarihten itibaren kaydedilenler YENİ.
+// Yaklaşan Taksitler sadece YENİ; Hatırlatma (uzun süre iletişimsiz) sadece ESKİ.
+const REFERENCE_DATE = new Date('2026-07-01T00:00:00');
+const isNewCustomer = (createdAt) => !!createdAt && createdAt >= REFERENCE_DATE;
 
 const REMINDER_OPTIONS = [
   { label: '1 ay',    value: 30 },
@@ -117,15 +122,12 @@ export default function HomeModule() {
     };
   }, [customers]);
 
-  // 🔔 YAKLAŞAN TAKSİTLER — son 1 ay içinde kaydedilen müşteriler için
+  // 🔔 YAKLAŞAN TAKSİTLER — YENİ müşteriler (2026-07-01+) için
   const upcomingInstallments = useMemo(() => {
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-
     const groups = new Map();
     for (const c of customers) {
       const created = toDate(c.createdAt);
-      if (!created || created < oneMonthAgo) continue;
+      if (!isNewCustomer(created)) continue;
 
       const plan = Array.isArray(c.installmentPlan) ? c.installmentPlan : [];
       if (plan.length === 0) continue;
@@ -195,10 +197,14 @@ export default function HomeModule() {
     }).length,
   [upcomingInstallments, todayMs]);
 
-  // Hatırlatma — uzun süre iletişim yok
+  // Hatırlatma — ESKİ müşteriler (2026-07-01 öncesi) uzun süre iletişimsiz.
+  // Ayrıca Senaryo 2/3 için: her müşterinin overdue taksit özeti hesaplanır
+  // (installmentPlan'daki geciken taksitler + en eski gecikme günü + plan aşıldı mı).
   const needAttention = useMemo(() => {
+    const todayMs = startOfToday();
     return customers
       .map((c) => {
+        // Son ödeme tarihi (paymentHistory'den de çıkarılır)
         let lastPay = toDate(c.lastPaymentAt);
         if (!lastPay && Array.isArray(c.paymentHistory) && c.paymentHistory.length > 0) {
           let maxDate = null;
@@ -211,9 +217,53 @@ export default function HomeModule() {
         const order = toDate(c.orderDate) || toDate(c.createdAt);
         const refDate = lastPay || order;
         const days = daysAgo(refDate);
-        return { ...c, _daysSince: days, _hasPayment: !!lastPay };
+
+        // Taksit planı analizi — Senaryo 2 vs 3 kararı için
+        const plan = Array.isArray(c.installmentPlan) ? c.installmentPlan : [];
+        let overdueCount = 0;
+        let oldestOverdueDays = 0;
+        let planExceeded = false;
+        if (plan.length > 0) {
+          // Son taksit vadesi bugünden önceyse plan süresi AŞILMIŞ (Senaryo 3'e düş)
+          const lastInst = plan[plan.length - 1];
+          const lastDue = lastInst?.vadesi?.toDate?.() || lastInst?.vadesi;
+          if (lastDue) {
+            const lastMs = (lastDue instanceof Date ? lastDue : new Date(lastDue)).getTime();
+            if (lastMs < todayMs) planExceeded = true;
+          }
+          if (!planExceeded) {
+            // Geciken taksitleri say
+            for (const inst of plan) {
+              if (inst.odendiMi) continue;
+              const due = inst.vadesi?.toDate?.() || inst.vadesi;
+              if (!due) continue;
+              const dueMs = (due instanceof Date ? due : new Date(due)).getTime();
+              if (dueMs < todayMs) {
+                overdueCount += 1;
+                const diffDays = Math.floor((todayMs - dueMs) / 86400000);
+                if (diffDays > oldestOverdueDays) oldestOverdueDays = diffDays;
+              }
+            }
+          }
+        }
+
+        return {
+          ...c,
+          _daysSince: days,
+          _hasPayment: !!lastPay,
+          _overdueCount: overdueCount,
+          _oldestOverdueDays: oldestOverdueDays,
+          _planExceeded: planExceeded,
+          _createdDate: toDate(c.createdAt),
+        };
       })
-      .filter((c) => !c.attentionDismissed && c._daysSince !== null && c._daysSince >= threshold)
+      // Sadece ESKİ müşteriler (2026-07-01 öncesi) hatırlatma listesine girer
+      .filter((c) =>
+        !c.attentionDismissed &&
+        c._daysSince !== null &&
+        c._daysSince >= threshold &&
+        !isNewCustomer(c._createdDate)
+      )
       .sort((a, b) => b._daysSince - a._daysSince)
       .slice(0, 20);
   }, [customers, threshold]);
@@ -436,6 +486,20 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
   const brideItems = isSplitCust ? installments.filter((it) => it.installment.side === 'bride') : [];
   const groomItems = isSplitCust ? installments.filter((it) => it.installment.side === 'groom') : [];
 
+  // installments listesini WA fonksiyonunun beklediği shape'e çevir
+  const toWaItems = (items) => items
+    .filter((it) => it.status === 'overdue')
+    .map((it) => {
+      const d = new Date(it.dueDate); d.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((todayMs - d.getTime()) / 86400000);
+      return {
+        installmentNo: it.installmentNo,
+        tutar: it.installment.tutar,
+        dueDate: it.dueDate,
+        daysOverdue: diffDays > 0 ? diffDays : 0,
+      };
+    });
+
   const sendSideWhatsApp = async (sideKey) => {
     const sideData = customer.sides?.[sideKey];
     const sideItems = sideKey === 'bride' ? brideItems : groomItems;
@@ -448,22 +512,32 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       );
       return;
     }
-    const sideOldest = sideItems[0];
-    const sideDue = new Date(sideOldest.dueDate); sideDue.setHours(0, 0, 0, 0);
-    const sideDiff = Math.round((sideDue.getTime() - todayMs) / 86400000);
-    const sideDaysOverdue = sideDiff < 0 ? Math.abs(sideDiff) : 0;
+    // Side içi installment numaralarını side planına göre yeniden hesapla
     const sidePlan = Array.isArray(sideData.installmentPlan) ? sideData.installmentPlan : [];
-    const sideTotalPlanCount = sidePlan.length;
-    const sideInstallmentNo = sidePlan.findIndex((p) => p.id === sideOldest.installment.id) + 1;
-    const result = await sendWhatsAppReminder({
+    const waItems = sideItems
+      .filter((it) => it.status === 'overdue')
+      .map((it) => {
+        const d = new Date(it.dueDate); d.setHours(0, 0, 0, 0);
+        const diffDays = Math.floor((todayMs - d.getTime()) / 86400000);
+        const sideNo = sidePlan.findIndex((p) => p.id === it.installment.id) + 1;
+        return {
+          installmentNo: sideNo || undefined,
+          tutar: it.installment.tutar,
+          dueDate: it.dueDate,
+          daysOverdue: diffDays > 0 ? diffDays : 0,
+        };
+      });
+
+    if (waItems.length === 0) {
+      Alert.alert('Geciken Yok', 'Bu tarafın vadesi geçmiş taksiti yok — sadece yaklaşan taksitler var.', [{ text: 'Tamam' }]);
+      return;
+    }
+
+    const result = await sendDetailedInstallmentReminder({
       customerName: `${customer.fullName} (${sideKey === 'bride' ? 'Kız' : 'Erkek'})`,
       phone: sideData.phone,
-      amount: sideOldest.installment.tutar,
-      dueDate: sideOldest.dueDate,
-      installmentNo: sideInstallmentNo || undefined,
-      totalInstallments: sideTotalPlanCount || undefined,
+      overdueInstallments: waItems,
       remainingDebt: sideData.remainingAmount,
-      daysOverdue: sideDaysOverdue,
     });
     if (!result.ok) {
       Alert.alert('WhatsApp Açılamadı', result.reason || 'Bilinmeyen hata', [{ text: 'Tamam' }], { tone: 'danger' });
@@ -479,15 +553,16 @@ function CustomerOverdueGroupRow({ group, onOpen }) {
       );
       return;
     }
-    const result = await sendWhatsAppReminder({
+    const waItems = toWaItems(installments);
+    if (waItems.length === 0) {
+      Alert.alert('Geciken Yok', 'Vadesi geçmiş taksit yok — sadece yaklaşan taksitler var.', [{ text: 'Tamam' }]);
+      return;
+    }
+    const result = await sendDetailedInstallmentReminder({
       customerName: customer.fullName,
       phone: customer.phone,
-      amount: oldest.installment.tutar,
-      dueDate: oldest.dueDate,
-      installmentNo: oldest.installmentNo,
-      totalInstallments: totalPlanCount,
+      overdueInstallments: waItems,
       remainingDebt: customer.remainingAmount,
-      daysOverdue,
     });
     if (!result.ok) {
       Alert.alert('WhatsApp Açılamadı', result.reason || 'Bilinmeyen hata', [{ text: 'Tamam' }], { tone: 'danger' });
@@ -584,12 +659,17 @@ function AttentionRow({ customer, onPress }) {
       );
       return;
     }
+    // Senaryo 2: plan içi geciken taksitler var + plan süresi aşılmamış
+    // Senaryo 3: plan yok ya da plan aşıldı → sadece süre
     const result = await sendStaleReminder({
       customerName: customer.fullName,
       phone: customer.phone,
       daysSince: customer._daysSince,
       hasPayment: customer._hasPayment,
       remainingDebt: customer.remainingAmount,
+      overdueInstallmentCount: customer._overdueCount,
+      oldestOverdueDays: customer._oldestOverdueDays,
+      planExceeded: customer._planExceeded,
     });
     if (!result.ok) {
       Alert.alert('WhatsApp Açılamadı', result.reason || 'Bilinmeyen hata', [{ text: 'Tamam' }], { tone: 'danger' });
