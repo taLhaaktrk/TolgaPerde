@@ -231,22 +231,29 @@ export default function HomeModule() {
             adjustsFontSizeToFit
             minimumFontScale={0.5}
           >
-            {loading ? '…' : formatTL(stats.totalDebt)}
+            {loading ? '…' : formatTL(stats.totalSales)}
           </Text>
           <Text style={styles.bigSub}>
-            toplam alacak · {stats.debtorCount} borçlu müşteri
+            toplam ciro · {stats.debtorCount} borçlu müşteri
           </Text>
 
-          {/* Progress bar */}
+          {/* Progress bar — büyük rakamın (toplam ciro) %X'i tahsil edilmiş */}
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${filledPct}%` }]} />
           </View>
           <View style={styles.progressMeta}>
             <Text style={styles.progressLeft}>
-              <Text style={{ color: colors.success, fontWeight: '700' }}>%{stats.pct} tahsil</Text>
-              {'  ·  '}{formatShort(stats.paid)}
+              <Text style={{ color: colors.success, fontWeight: '800' }}>
+                {formatShort(stats.paid)} tahsil
+              </Text>
+              <Text style={{ color: colors.textMuted }}> (%{stats.pct})</Text>
             </Text>
-            <Text style={styles.progressRight}>{formatShort(stats.totalDebt)} bekliyor</Text>
+            <Text style={styles.progressRight}>
+              <Text style={{ color: colors.danger, fontWeight: '800' }}>
+                {formatShort(stats.totalDebt)}
+              </Text>
+              <Text style={{ color: colors.textMuted }}> bekliyor</Text>
+            </Text>
           </View>
         </View>
 
