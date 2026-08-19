@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Dropdown from '../components/ui/Dropdown';
@@ -208,10 +208,10 @@ export default function HomeModule() {
       >
         {/* Üst başlık paneli — hafif bordo tint + altın hairline */}
         <View style={styles.heroBlock}>
-          <View style={styles.brandRow}>
+          <View style={styles.brandBlock}>
             <Text style={styles.brandTxt}>TOLGA PERDE</Text>
-            <View style={styles.brandDot} />
-            <Text style={styles.brandSub}>KASA</Text>
+            <View style={styles.brandUnderline} />
+            <Text style={styles.brandSub}>KASA · DEFTER</Text>
           </View>
           <Text style={styles.dateHeader}>{todayHeader()}</Text>
           <Text
@@ -639,39 +639,48 @@ const styles = StyleSheet.create({
   heroBlock: {
     marginHorizontal: -22,
     paddingHorizontal: 22,
-    paddingTop: 4,
-    paddingBottom: 18,
-    marginBottom: 24,
-    backgroundColor: 'rgba(92, 13, 20, 0.22)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201, 169, 97, 0.35)',
+    paddingTop: 10,
+    paddingBottom: 22,
+    marginBottom: 26,
+    backgroundColor: 'rgba(92, 13, 20, 0.26)',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(201, 169, 97, 0.45)',
   },
 
-  // Marka satırı — küçük eyebrow
-  brandRow: {
-    flexDirection: 'row',
+  // Marka bloğu — şaşalı büyük altın (ana sayfaya girince göz alan)
+  brandBlock: {
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    marginBottom: 18,
+    marginTop: 4,
   },
   brandTxt: {
     color: colors.gold,
-    fontSize: 12,
+    fontSize: 28,
     fontWeight: '900',
-    letterSpacing: 2.5,
+    letterSpacing: 6,
+    textAlign: 'center',
+    ...(Platform.OS === 'web'
+      ? { textShadow: '0 0 20px rgba(201, 169, 97, 0.4), 0 0 8px rgba(195, 49, 65, 0.3)' }
+      : {
+          textShadowColor: 'rgba(201, 169, 97, 0.55)',
+          textShadowOffset: { width: 0, height: 0 },
+          textShadowRadius: 12,
+        }),
   },
-  brandDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
+  brandUnderline: {
+    width: 54,
+    height: 2,
     backgroundColor: colors.gold,
-    opacity: 0.6,
+    marginTop: 8,
+    borderRadius: 1,
+    opacity: 0.85,
   },
   brandSub: {
     color: colors.textMuted,
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 2,
+    letterSpacing: 3,
+    marginTop: 8,
   },
 
   // Üst blok — defter tarih
