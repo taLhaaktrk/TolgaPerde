@@ -26,7 +26,7 @@ export async function createTestCustomers() {
   const specs = [
     // ─── TEST1 — YENİ müşteri, 15 gün geciken tek taksit (Senaryo 1, kademe 1: kibar) ───
     {
-      fullName: 'TEST1 — Yeni 15gun (kibar ton)',
+      fullName: 'TEST1 Yeni Musteri',
       phone: TEST_PHONE,
       totalAmount: 12000,
       deposit: 3000,
@@ -48,7 +48,7 @@ export async function createTestCustomers() {
 
     // ─── TEST2 — YENİ müşteri, 40 gün geciken (Senaryo 1, kademe 2: saygılı ton) ───
     {
-      fullName: 'TEST2 — Yeni 40gun (saygili ton)',
+      fullName: 'TEST2 Yeni Musteri',
       phone: TEST_PHONE,
       totalAmount: 15000,
       deposit: 3000,
@@ -71,7 +71,7 @@ export async function createTestCustomers() {
 
     // ─── TEST3 — YENİ müşteri, 80 gün geciken (Senaryo 1, kademe 3: ciddi ton) ───
     {
-      fullName: 'TEST3 — Yeni 80gun (ciddi ton)',
+      fullName: 'TEST3 Yeni Musteri',
       phone: TEST_PHONE,
       totalAmount: 20000,
       deposit: 4000,
@@ -94,7 +94,7 @@ export async function createTestCustomers() {
 
     // ─── TEST4 — ESKİ müşteri + plan içi geciken (Senaryo 2) ───
     {
-      fullName: 'TEST4 — Eski plan ici (Senaryo 2)',
+      fullName: 'TEST4 Eski Musteri',
       phone: TEST_PHONE,
       totalAmount: 25000,
       deposit: 5000,
@@ -118,7 +118,7 @@ export async function createTestCustomers() {
 
     // ─── TEST5 — ESKİ müşteri + plan süresi aşıldı (Senaryo 3, sadece süre) ───
     {
-      fullName: 'TEST5 — Eski plan asildi (Senaryo 3)',
+      fullName: 'TEST5 Eski Musteri',
       phone: TEST_PHONE,
       totalAmount: 15000,
       deposit: 5000,
@@ -140,7 +140,7 @@ export async function createTestCustomers() {
 
     // ─── TEST6 — ESKİ müşteri + plan YOK (Senaryo 3, sadece süre) ───
     {
-      fullName: 'TEST6 — Eski plan yok (Senaryo 3)',
+      fullName: 'TEST6 Eski Musteri',
       phone: TEST_PHONE,
       totalAmount: 8000,
       deposit: 2000,
